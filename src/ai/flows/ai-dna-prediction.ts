@@ -51,7 +51,7 @@ const analyzeDnaAndPredictRelativesFlow = ai.defineFlow(
   },
   async (input) => {
     const { output } = await analyzeDnaAndPredictRelativesPrompt(input, {
-      model: googleAI.model("gemini-1.5-flash"),
+      model: googleAI.model("gemini-1.5-flash-8b"),
     });
     return output!;
   }

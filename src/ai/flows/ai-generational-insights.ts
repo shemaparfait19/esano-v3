@@ -1,4 +1,4 @@
-'use server';
+"use server";
 
 /**
  * @fileOverview An AI agent that analyzes genetic markers to provide insights into health predispositions, phenotypic traits, and ancestral origins.
@@ -6,14 +6,14 @@
  * - getGenerationalInsights - A function that processes genetic data and returns AI-driven insights.
  */
 
-import {ai} from '@/ai/genkit';
-import {googleAI} from '@genkit-ai/googleai';
+import { ai } from "@/ai/genkit";
+import { googleAI } from "@genkit-ai/googleai";
 import {
   GenerationalInsightsInputSchema,
   GenerationalInsightsOutputSchema,
   type GenerationalInsightsInput,
   type GenerationalInsightsOutput,
-} from '@/ai/schemas/ai-generational-insights';
+} from "@/ai/schemas/ai-generational-insights";
 
 export async function getGenerationalInsights(
   input: GenerationalInsightsInput
@@ -22,9 +22,9 @@ export async function getGenerationalInsights(
 }
 
 const prompt = ai.definePrompt({
-  name: 'generationalInsightsPrompt',
-  input: {schema: GenerationalInsightsInputSchema},
-  output: {schema: GenerationalInsightsOutputSchema},
+  name: "generationalInsightsPrompt",
+  input: { schema: GenerationalInsightsInputSchema },
+  output: { schema: GenerationalInsightsOutputSchema },
   prompt: `You are an AI assistant specialized in analyzing genetic data to provide insights into health, traits, and ancestry.
 
   Analyze the provided genetic marker data and generate insights into the following areas:
@@ -45,12 +45,14 @@ const prompt = ai.definePrompt({
 
 const generationalInsightsFlow = ai.defineFlow(
   {
-    name: 'generationalInsightsFlow',
+    name: "generationalInsightsFlow",
     inputSchema: GenerationalInsightsInputSchema,
     outputSchema: GenerationalInsightsOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input, { model: googleAI.model('gemini-1.5-flash') });
+  async (input) => {
+    const { output } = await prompt(input, {
+      model: googleAI.model("gemini-1.5-flash-8b"),
+    });
     return output!;
   }
 );
