@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+} from "firebase/firestore";
 
 type ChatSummary = { peerId: string; lastMessage: string; createdAt: string };
 type Message = {
@@ -15,64 +25,155 @@ type Message = {
   createdAt: string;
 };
 
+function PeerName({ userId }: { userId: string }) {
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    let ignore = false;
+    async function load() {
+      try {
+        const snap = await getDoc(doc(db, "users", userId));
+        const d = snap.exists() ? (snap.data() as any) : null;
+        if (!ignore) {
+          const nm =
+            d?.fullName ||
+            d?.preferredName ||
+            [d?.firstName, d?.middleName, d?.lastName]
+              .filter(Boolean)
+              .join(" ");
+          setName(nm || null);
+        }
+      } catch {}
+    }
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [userId]);
+  return <>{name || userId}</>;
+}
+
 export default function MessagesPage() {
   const { user } = useAuth();
   const [list, setList] = useState<ChatSummary[]>([]);
   const [activePeer, setActivePeer] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
-  const intervalRef = useRef<any>(null);
 
+  // Live chat list (latest per peer)
   useEffect(() => {
-    let ignore = false;
-    async function load() {
-      if (!user?.uid) return;
-      const res = await fetch(`/api/chat/list?userId=${user.uid}`);
-      const data = await res.json();
-      if (!ignore && data?.chats) setList(data.chats);
-    }
-    load();
-    const iv = setInterval(load, 5000);
+    if (!user?.uid) return;
+    const ref = collection(db, "messages");
+    const qFrom = query(ref, where("senderId", "==", user.uid));
+    const qTo = query(ref, where("receiverId", "==", user.uid));
+    const peers = new Map<string, ChatSummary>();
+
+    const update = (docs: any[]) => {
+      for (const d of docs) {
+        const m = { id: d.id, ...(d.data() as any) } as any;
+        if (m.senderId !== user.uid && m.receiverId !== user.uid) continue;
+        const peer = m.senderId === user.uid ? m.receiverId : m.senderId;
+        const prev = peers.get(peer);
+        if (!prev || (prev.createdAt || "") < (m.createdAt || "")) {
+          peers.set(peer, {
+            peerId: peer,
+            lastMessage: m.text,
+            createdAt: m.createdAt,
+          });
+        }
+      }
+      const arr = Array.from(peers.values());
+      arr.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      setList(arr);
+    };
+
+    const unsubA = onSnapshot(qFrom, (snap) => update(snap.docs));
+    const unsubB = onSnapshot(qTo, (snap) => update(snap.docs));
     return () => {
-      ignore = true;
-      clearInterval(iv);
+      unsubA();
+      unsubB();
     };
   }, [user?.uid]);
 
+  // Live thread between me and active peer (two queries, merged)
   useEffect(() => {
     if (!user?.uid || !activePeer) return;
-    let ignore = false;
-    async function loadThread() {
-      const res = await fetch(
-        `/api/chat/messages?a=${user.uid}&b=${activePeer}`
+    const ref = collection(db, "messages");
+    const q1 = query(
+      ref,
+      where("senderId", "==", user.uid),
+      where("receiverId", "==", activePeer)
+    );
+    const q2 = query(
+      ref,
+      where("senderId", "==", activePeer),
+      where("receiverId", "==", user.uid)
+    );
+
+    let current: Message[] = [];
+    const mergeUpdate = () => {
+      const sorted = [...current].sort((a, b) =>
+        (a.createdAt || "").localeCompare(b.createdAt || "")
       );
-      const data = await res.json();
-      if (!ignore && data?.messages) setMessages(data.messages);
-    }
-    loadThread();
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(loadThread, 3000);
+      setMessages(sorted);
+    };
+
+    const unsub1 = onSnapshot(q1, (snap) => {
+      const part = snap.docs.map(
+        (d) => ({ id: d.id, ...(d.data() as any) } as any)
+      );
+      current = [
+        ...part.map((m) => ({
+          id: m.id,
+          senderId: m.senderId,
+          receiverId: m.receiverId,
+          text: m.text,
+          createdAt: m.createdAt,
+        })),
+        ...current.filter(
+          (m) => !(m.senderId === user.uid && m.receiverId === activePeer)
+        ),
+      ];
+      mergeUpdate();
+    });
+    const unsub2 = onSnapshot(q2, (snap) => {
+      const part = snap.docs.map(
+        (d) => ({ id: d.id, ...(d.data() as any) } as any)
+      );
+      current = [
+        ...part.map((m) => ({
+          id: m.id,
+          senderId: m.senderId,
+          receiverId: m.receiverId,
+          text: m.text,
+          createdAt: m.createdAt,
+        })),
+        ...current.filter(
+          (m) => !(m.senderId === activePeer && m.receiverId === user.uid)
+        ),
+      ];
+      mergeUpdate();
+    });
+    // Mark incoming messages as read when opening the thread
+    fetch("/api/chat/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ receiverId: user.uid, senderId: activePeer }),
+    }).catch(() => {});
     return () => {
-      ignore = true;
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      unsub1();
+      unsub2();
     };
   }, [user?.uid, activePeer]);
 
   const send = async () => {
     if (!user?.uid || !activePeer || !text.trim()) return;
     const body = { fromUserId: user.uid, toUserId: activePeer, text };
-    const res = await fetch("/api/chat/send", {
+    await fetch("/api/chat/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (res.ok) {
-      setText("");
-      const data = await fetch(
-        `/api/chat/messages?a=${user.uid}&b=${activePeer}`
-      ).then((r) => r.json());
-      if (data?.messages) setMessages(data.messages);
-    }
+    setText("");
   };
 
   return (
@@ -94,7 +195,7 @@ export default function MessagesPage() {
               className="w-full justify-start"
               onClick={() => setActivePeer(c.peerId)}
             >
-              {c.peerId}
+              <PeerName userId={c.peerId} />
             </Button>
           ))}
         </CardContent>
@@ -103,7 +204,12 @@ export default function MessagesPage() {
       <Card className="md:col-span-2">
         <CardHeader>
           <CardTitle className="font-headline text-xl text-primary">
-            Conversation
+            Conversation{" "}
+            {activePeer && (
+              <span className="text-muted-foreground">
+                – <PeerName userId={activePeer} />
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col h-[60vh]">
