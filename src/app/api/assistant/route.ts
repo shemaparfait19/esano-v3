@@ -24,6 +24,30 @@ export async function POST(req: Request) {
     if (!query || typeof query !== "string") {
       return NextResponse.json({ error: "Missing query" }, { status: 400 });
     }
+    // Lightweight diagnostics endpoint to verify configuration without exposing secrets
+    if (query === "__diag") {
+      const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+      const hasServiceAccount = Boolean(process.env.SERVICE_ACCOUNT_JSON);
+      let firebaseOk = false as boolean;
+      let firebaseError = undefined as string | undefined;
+      try {
+        // Perform a harmless no-op access to ensure admin SDK is initialized
+        await adminDb.collection("__diag").doc("ping").get();
+        firebaseOk = true;
+      } catch (e: any) {
+        firebaseOk = false;
+        firebaseError = e?.message ?? String(e);
+      }
+      return NextResponse.json({
+        ok: true,
+        hasGemini,
+        hasServiceAccount,
+        firebaseOk,
+        firebaseError,
+        runtime,
+        dynamic,
+      });
+    }
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
         { error: "GEMINI_API_KEY not set on server" },

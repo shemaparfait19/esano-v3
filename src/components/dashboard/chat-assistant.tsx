@@ -51,7 +51,9 @@ export function ChatAssistant() {
         const data = await res.json();
         const assistantResponseText =
           data?.response ??
-          "I'm sorry, I'm having trouble connecting right now. Please try again later.";
+          (data?.error
+            ? `Error: ${data.error}${data.detail ? ` — ${data.detail}` : ""}`
+            : "I'm sorry, I'm having trouble connecting right now. Please try again later.");
         const assistantMessage: Message = {
           id: Date.now() + 1,
           role: "assistant",
