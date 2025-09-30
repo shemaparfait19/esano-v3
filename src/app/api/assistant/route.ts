@@ -106,15 +106,52 @@ export async function POST(req: Request) {
           connectionsSummary = { pending, accepted };
         }
 
+        const p: any = profile || undefined;
         const ctx = {
           scope: scope || "own",
           subjectUserId,
-          profile: profile
+          profile: p
             ? {
-                fullName: (profile as any).fullName,
-                birthPlace: (profile as any).birthPlace,
-                clanOrCulturalInfo: (profile as any).clanOrCulturalInfo,
-                relativesNames: (profile as any).relativesNames,
+                // Legacy/basic
+                fullName: p.fullName,
+                birthPlace: p.birthPlace,
+                clanOrCulturalInfo: p.clanOrCulturalInfo,
+                relativesNames: p.relativesNames,
+                // Personal
+                firstName: p.firstName,
+                middleName: p.middleName,
+                lastName: p.lastName,
+                preferredName: p.preferredName,
+                birthDate: p.birthDate,
+                gender: p.gender,
+                nationality: p.nationality,
+                nid: p.nid,
+                maritalStatus: p.maritalStatus,
+                phoneNumber: p.phoneNumber,
+                email: p.email,
+                province: p.province,
+                district: p.district,
+                sector: p.sector,
+                cell: p.cell,
+                village: p.village,
+                preferredLanguage: p.preferredLanguage,
+                profilePicture: p.profilePicture,
+                // Residence
+                residenceProvince: p.residenceProvince,
+                residenceDistrict: p.residenceDistrict,
+                residenceSector: p.residenceSector,
+                residenceCell: p.residenceCell,
+                residenceVillage: p.residenceVillage,
+                streetName: p.streetName,
+                // Social & relations
+                socialMedias: p.socialMedias,
+                location: p.location,
+                spouseName: p.spouseName,
+                // Education & Work (truncated for safety)
+                education: Array.isArray(p.education)
+                  ? p.education.slice(0, 10)
+                  : undefined,
+                work: Array.isArray(p.work) ? p.work.slice(0, 10) : undefined,
               }
             : undefined,
           tree: tree
