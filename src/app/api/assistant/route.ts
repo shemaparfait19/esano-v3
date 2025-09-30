@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     if (query === "__diag") {
       const hasGemini = Boolean(process.env.GEMINI_API_KEY);
       const hasDeepseek = Boolean(process.env.DEEPSEEK_API_KEY);
+      const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
       const hasServiceAccount = Boolean(process.env.SERVICE_ACCOUNT_JSON);
       let firebaseOk = false as boolean;
       let firebaseError = undefined as string | undefined;
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
         ok: true,
         hasGemini,
         hasDeepseek,
+        hasOpenRouter,
         hasServiceAccount,
         firebaseOk,
         firebaseError,
@@ -129,6 +131,54 @@ export async function POST(req: Request) {
         };
         userContext = JSON.stringify(ctx);
       } catch {}
+    }
+
+    // If OpenRouter key is configured, use OpenRouter first
+    if (process.env.OPENROUTER_API_KEY) {
+      const systemPrompt =
+        "You are a helpful AI assistant specialized in genealogy and DNA analysis. When available, use the provided user context to personalize guidance, but never reveal raw data.";
+      const composedUser = userContext
+        ? `User Context (JSON): ${userContext}\n\nQuestion: ${query}`
+        : query;
+      const orResp = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            // Default to a widely available model; allow override via env
+            model: process.env.OPENROUTER_MODEL || "deepseek/deepseek-chat",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: composedUser },
+            ],
+          }),
+        }
+      );
+      if (!orResp.ok) {
+        const detailText = await orResp.text();
+        // Fallback to DeepSeek if configured, then Gemini
+        if (process.env.DEEPSEEK_API_KEY) {
+          // fall through to DeepSeek block below
+        } else if (process.env.GEMINI_API_KEY) {
+          const result = await withRetry(() =>
+            askGenealogyAssistant({ query, userContext })
+          );
+          return NextResponse.json({ response: result.response });
+        } else {
+          return NextResponse.json(
+            { error: "Assistant unavailable", detail: detailText },
+            { status: 500 }
+          );
+        }
+      } else {
+        const orJson: any = await orResp.json();
+        const content = orJson?.choices?.[0]?.message?.content ?? "";
+        return NextResponse.json({ response: content || "" });
+      }
     }
 
     // If DeepSeek key is configured, use DeepSeek API directly
