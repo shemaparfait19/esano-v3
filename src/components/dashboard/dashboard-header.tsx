@@ -21,8 +21,30 @@ import {
   onSnapshot,
   query,
   where,
+  doc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+
+function RequesterName({ userId }: { userId: string }) {
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    let ignore = false;
+    async function load() {
+      try {
+        const snap = await getDoc(doc(db, "users", userId));
+        const d = snap.exists() ? (snap.data() as any) : null;
+        if (!ignore)
+          setName(d?.fullName || d?.preferredName || d?.firstName || null);
+      } catch {}
+    }
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [userId]);
+  return <>{name || userId}</>;
+}
 
 export function DashboardHeader() {
   const { user, signOut } = useAuth();
@@ -86,7 +108,9 @@ export function DashboardHeader() {
             )}
             {pendingItems.map((r) => (
               <div key={r.id} className="px-3 py-2">
-                <div className="text-sm">From: {r.fromUserId}</div>
+                <div className="text-sm">
+                  From: <RequesterName userId={r.fromUserId} />
+                </div>
                 <div className="mt-2 flex gap-2">
                   <Button
                     size="sm"

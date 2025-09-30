@@ -331,6 +331,21 @@ export async function respondToConnectionRequest(
     .collection("connectionRequests")
     .doc(id)
     .set({ status, respondedAt: new Date().toISOString() }, { merge: true });
+  // Notify requester about the decision
+  try {
+    const snap = await adminDb.collection("connectionRequests").doc(id).get();
+    if (snap.exists) {
+      const r = snap.data() as ConnectionRequest;
+      await adminDb.collection("notifications").add({
+        userId: r.fromUserId,
+        type:
+          status === "accepted" ? "connection_accepted" : "connection_declined",
+        relatedUserId: r.toUserId,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  } catch {}
   return { ok: true } as const;
 }
 
