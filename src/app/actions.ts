@@ -307,6 +307,16 @@ export async function sendConnectionRequest(
     .collection("connectionRequests")
     .doc(id)
     .set(req, { merge: true });
+  // Create notification for recipient
+  try {
+    await adminDb.collection("notifications").add({
+      userId: toUserId,
+      type: "incoming_connection_request",
+      relatedUserId: fromUserId,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+  } catch {}
   return { ok: true } as const;
 }
 

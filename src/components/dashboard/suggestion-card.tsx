@@ -15,9 +15,10 @@ import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import React, { useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 type Props = { suggestion: SuggestedMatch };
 
@@ -31,6 +32,65 @@ export function SuggestionCard({ suggestion }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const [requested, setRequested] = useState(false);
+  const [incomingId, setIncomingId] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    async function load() {
+      if (!user?.uid) return;
+      try {
+        const ref = collection(db, "connectionRequests");
+        const [incomingSnap, outgoingSnap, acceptedA, acceptedB] =
+          await Promise.all([
+            getDocs(
+              query(
+                ref,
+                where("fromUserId", "==", suggestion.userId),
+                where("toUserId", "==", user.uid),
+                where("status", "==", "pending")
+              )
+            ),
+            getDocs(
+              query(
+                ref,
+                where("fromUserId", "==", user.uid),
+                where("toUserId", "==", suggestion.userId),
+                where("status", "==", "pending")
+              )
+            ),
+            getDocs(
+              query(
+                ref,
+                where("fromUserId", "==", user.uid),
+                where("toUserId", "==", suggestion.userId),
+                where("status", "==", "accepted")
+              )
+            ),
+            getDocs(
+              query(
+                ref,
+                where("fromUserId", "==", suggestion.userId),
+                where("toUserId", "==", user.uid),
+                where("status", "==", "accepted")
+              )
+            ),
+          ]);
+        const incId = incomingSnap.docs[0]?.id ?? null;
+        const outPending = outgoingSnap.size > 0;
+        const accepted = acceptedA.size > 0 || acceptedB.size > 0;
+        if (!ignore) {
+          setIncomingId(incId);
+          setRequested(outPending);
+          setIsConnected(accepted);
+        }
+      } catch {}
+    }
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [user?.uid, suggestion.userId]);
 
   const onRequest = () => {
     if (!user) return;
@@ -90,6 +150,15 @@ export function SuggestionCard({ suggestion }: Props) {
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary">Confidence {percent}%</Badge>
+          {isConnected && <Badge variant="default">Connected</Badge>}
+          {!isConnected && (requested || incomingId) && (
+            <Badge
+              variant="outline"
+              className="border-yellow-500 text-yellow-700"
+            >
+              Pending
+            </Badge>
+          )}
           {suggestion.reasons.slice(0, 3).map((r, idx) => (
             <Badge key={idx} variant="outline">
               {r}
@@ -98,14 +167,51 @@ export function SuggestionCard({ suggestion }: Props) {
         </div>
       </CardContent>
       <CardFooter className="gap-2">
-        <Button
-          className="w-full"
-          onClick={onRequest}
-          disabled={isPending || requested}
-        >
-          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {requested ? "Requested" : "Request Connection"}
-        </Button>
+        {!isConnected && !incomingId && (
+          <Button
+            className="w-full"
+            onClick={onRequest}
+            disabled={isPending || requested}
+          >
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {requested ? "Requested" : "Request Connection"}
+          </Button>
+        )}
+        {incomingId && !isConnected && (
+          <>
+            <Button
+              className="w-full"
+              onClick={async () => {
+                await fetch("/api/requests", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: incomingId, status: "accepted" }),
+                });
+                setIncomingId(null);
+                setIsConnected(true);
+                toast({ title: "Connection accepted" });
+              }}
+            >
+              Accept
+            </Button>
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={async () => {
+                await fetch("/api/requests", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: incomingId, status: "declined" }),
+                });
+                setIncomingId(null);
+                setRequested(false);
+                toast({ title: "Connection declined" });
+              }}
+            >
+              Decline
+            </Button>
+          </>
+        )}
         <Button className="w-full" variant="outline" onClick={onViewProfile}>
           View Profile
         </Button>

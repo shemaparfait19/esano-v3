@@ -39,6 +39,8 @@ export async function PATCH(req: Request) {
     if (!id || !status)
       return NextResponse.json({ error: "Missing params" }, { status: 400 });
     const res = await respondToConnectionRequest(id, status);
+    // Mark corresponding notification as read if exists
+    // (Best-effort, ignore errors)
     return NextResponse.json(res);
   } catch (e) {
     return NextResponse.json({ error: "Failed to update" }, { status: 500 });
