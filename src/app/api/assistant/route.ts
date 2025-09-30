@@ -27,6 +27,7 @@ export async function POST(req: Request) {
     // Lightweight diagnostics endpoint to verify configuration without exposing secrets
     if (query === "__diag") {
       const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+      const hasDeepseek = Boolean(process.env.DEEPSEEK_API_KEY);
       const hasServiceAccount = Boolean(process.env.SERVICE_ACCOUNT_JSON);
       let firebaseOk = false as boolean;
       let firebaseError = undefined as string | undefined;
@@ -41,18 +42,13 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: true,
         hasGemini,
+        hasDeepseek,
         hasServiceAccount,
         firebaseOk,
         firebaseError,
         runtime,
         dynamic,
       });
-    }
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json(
-        { error: "GEMINI_API_KEY not set on server" },
-        { status: 500 }
-      );
     }
 
     // Determine whose data to load
@@ -133,6 +129,47 @@ export async function POST(req: Request) {
         };
         userContext = JSON.stringify(ctx);
       } catch {}
+    }
+
+    // If DeepSeek key is configured, use DeepSeek API directly
+    if (process.env.DEEPSEEK_API_KEY) {
+      const systemPrompt =
+        "You are a helpful AI assistant specialized in genealogy and DNA analysis. When available, use the provided user context to personalize guidance, but never reveal raw data.";
+      const composedUser = userContext
+        ? `User Context (JSON): ${userContext}\n\nQuestion: ${query}`
+        : query;
+      const dsResp = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: composedUser },
+          ],
+        }),
+      });
+      if (!dsResp.ok) {
+        const detail = await dsResp.text();
+        return NextResponse.json(
+          { error: "Assistant unavailable", detail },
+          { status: 500 }
+        );
+      }
+      const dsJson: any = await dsResp.json();
+      const content = dsJson?.choices?.[0]?.message?.content ?? "";
+      return NextResponse.json({ response: content || "" });
+    }
+
+    // Otherwise, require Gemini and use Genkit flow
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: "GEMINI_API_KEY not set on server" },
+        { status: 500 }
+      );
     }
 
     const result = await withRetry(() =>
