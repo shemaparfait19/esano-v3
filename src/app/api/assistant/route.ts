@@ -153,9 +153,24 @@ export async function POST(req: Request) {
         }),
       });
       if (!dsResp.ok) {
-        const detail = await dsResp.text();
+        let detailText = await dsResp.text();
+        try {
+          const maybeJson = JSON.parse(detailText);
+          const msg = maybeJson?.error?.message as string | undefined;
+          const code = maybeJson?.error?.code as string | undefined;
+          const isInsufficient =
+            (code && code.toLowerCase().includes("insufficient")) ||
+            (msg && msg.toLowerCase().includes("insufficient"));
+          if (isInsufficient && process.env.GEMINI_API_KEY) {
+            // Fallback to Gemini via Genkit
+            const result = await withRetry(() =>
+              askGenealogyAssistant({ query, userContext })
+            );
+            return NextResponse.json({ response: result.response });
+          }
+        } catch {}
         return NextResponse.json(
-          { error: "Assistant unavailable", detail },
+          { error: "Assistant unavailable", detail: detailText },
           { status: 500 }
         );
       }
