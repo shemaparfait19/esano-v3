@@ -16,7 +16,7 @@ import { db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
@@ -128,6 +128,13 @@ export function SuggestionCard({ suggestion }: Props) {
     router.push(`/dashboard/profile/${suggestion.userId}`);
   };
 
+  const onMessage = () => {
+    if (!user) return;
+    if (isConnected) {
+      router.push(`/dashboard/messages?peer=${suggestion.userId}`);
+    }
+  };
+
   return (
     <Card className="flex flex-col">
       <CardHeader className="flex-row items-center gap-4">
@@ -215,6 +222,11 @@ export function SuggestionCard({ suggestion }: Props) {
         <Button className="w-full" variant="outline" onClick={onViewProfile}>
           View Profile
         </Button>
+        {isConnected && (
+          <Button className="w-full" variant="secondary" onClick={onMessage}>
+            <MessageCircle className="mr-2 h-4 w-4" /> Message
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );

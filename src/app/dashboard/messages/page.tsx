@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ function PeerName({ userId }: { userId: string }) {
 
 export default function MessagesPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
   const [list, setList] = useState<ChatSummary[]>([]);
   const [activePeer, setActivePeer] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -88,11 +90,22 @@ export default function MessagesPage() {
 
     const unsubA = onSnapshot(qFrom, (snap) => update(snap.docs));
     const unsubB = onSnapshot(qTo, (snap) => update(snap.docs));
+    // If deep-link peer param is present, select it
+    const initialPeer = searchParams?.get("peer");
+    if (initialPeer) setActivePeer(initialPeer);
     return () => {
       unsubA();
       unsubB();
     };
   }, [user?.uid]);
+
+  // Auto-select first chat if none selected and list populated
+  useEffect(() => {
+    if (!activePeer && list.length > 0) {
+      const initialPeer = searchParams?.get("peer");
+      setActivePeer(initialPeer || list[0].peerId);
+    }
+  }, [activePeer, list]);
 
   // Live thread between me and active peer (two queries, merged)
   useEffect(() => {
