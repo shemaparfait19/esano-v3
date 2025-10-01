@@ -3,6 +3,8 @@ export interface FamilyMember {
   fullName: string;
   firstName: string;
   lastName: string;
+  x?: number;
+  y?: number;
   birthDate?: string;
   deathDate?: string;
   gender?: "male" | "female" | "other";
