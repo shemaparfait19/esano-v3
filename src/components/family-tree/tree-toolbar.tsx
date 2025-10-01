@@ -41,6 +41,8 @@ export function TreeToolbar({
   onExport,
   onToggleFullscreen,
   onOpenSettings,
+  onUndo,
+  onRedo,
 }: TreeToolbarProps) {
   const {
     renderOptions,
