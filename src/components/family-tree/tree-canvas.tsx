@@ -36,6 +36,7 @@ export function TreeCanvas({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastPan, setLastPan] = useState({ x: 0, y: 0 });
   const [nodeOffsets, setNodeOffsets] = useState({ x: 0, y: 0 });
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -52,25 +53,29 @@ export function TreeCanvas({
     setSelectedNode,
     setEditingNode,
     renderOptions,
+    updateMember,
   } = useFamilyTreeStore();
 
-  // ===== Build layout
+  // ===== Build layout with independent node positions
   const buildLayoutFromPositions = () => {
     const sorted = [...members].sort((a, b) =>
       (a.id || "").localeCompare(b.id || "")
     );
-    const nodeWidth = 180;
-    const nodeHeight = 80;
-    const gridX = 220;
-    const gridY = 140;
+    const nodeWidth = 200;
+    const nodeHeight = 100;
+    const gridX = 280;
+    const gridY = 180;
+
     const nodes = sorted.map((m, i) => {
-      const x = typeof m.x === "number" ? m.x : 120 + (i % 5) * gridX;
-      const y = typeof m.y === "number" ? m.y : 120 + Math.floor(i / 5) * gridY;
+      const x = typeof m.x === "number" ? m.x : 150 + (i % 4) * gridX;
+      const y = typeof m.y === "number" ? m.y : 150 + Math.floor(i / 4) * gridY;
       return { id: m.id, x, y, width: nodeWidth, height: nodeHeight };
     });
+
     const nodeById: Record<string, any> = Object.fromEntries(
       nodes.map((n) => [n.id, n])
     );
+
     const edgePaths = edges.map((e) => {
       const a = nodeById[e.fromId];
       const b = nodeById[e.toId];
@@ -82,21 +87,26 @@ export function TreeCanvas({
           path: "",
           type: e.type,
         };
+
       const fromX = a.x + a.width / 2;
       const fromY = a.y + a.height / 2;
       const toX = b.x + b.width / 2;
       const toY = b.y + b.height / 2;
-      const path =
-        e.type === "spouse"
-          ? `M ${fromX} ${fromY} L ${toX} ${toY}`
-          : (() => {
-              const midY = (fromY + toY) / 2;
-              const c1 = fromY + (midY - fromY) * 0.5;
-              const c2 = toY - (toY - midY) * 0.5;
-              return `M ${fromX} ${fromY} C ${fromX} ${c1} ${toX} ${c2} ${toX} ${toY}`;
-            })();
+
+      let path = "";
+      if (e.type === "spouse") {
+        path = `M ${fromX} ${fromY} L ${toX} ${toY}`;
+      } else {
+        const midY = (fromY + toY) / 2;
+        const controlOffset = Math.abs(toY - fromY) * 0.4;
+        const c1y = fromY + controlOffset;
+        const c2y = toY - controlOffset;
+        path = `M ${fromX} ${fromY} C ${fromX} ${c1y}, ${toX} ${c2y}, ${toX} ${toY}`;
+      }
+
       return { id: e.id, fromId: e.fromId, toId: e.toId, path, type: e.type };
     });
+
     return { nodes, edges: edgePaths };
   };
 
@@ -120,70 +130,79 @@ export function TreeCanvas({
     return () => window.removeEventListener("resize", handleResize);
   }, [updateCanvasState]);
 
-  // ===== Render
-  const render = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvasState.width, canvasState.height);
+  // ===== Draw crown icon
+  const drawCrown = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    size: number
+  ) => {
     ctx.save();
-    ctx.translate(canvasState.panX, canvasState.panY);
-    ctx.scale(canvasState.zoom, canvasState.zoom);
-    const localLayout = buildLayoutFromPositions();
-    renderEdges(ctx, localLayout.edges as any[]);
-    renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
+    ctx.fillStyle = "#fbbf24";
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 1.5;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y + size * 0.6);
+    ctx.lineTo(x - size * 0.5, y + size * 0.6);
+    ctx.lineTo(x - size * 0.4, y);
+    ctx.lineTo(x - size * 0.2, y + size * 0.4);
+    ctx.lineTo(x, y - size * 0.1);
+    ctx.lineTo(x + size * 0.2, y + size * 0.4);
+    ctx.lineTo(x + size * 0.4, y);
+    ctx.lineTo(x + size * 0.5, y + size * 0.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.arc(x + i * size * 0.2, y + size * 0.1, size * 0.12, 0, Math.PI * 2);
+      ctx.fillStyle = "#ef4444";
+      ctx.fill();
+    }
+
     ctx.restore();
-  }, [members, edges, canvasState, renderOptions]);
+  };
 
-  // ===== Keyboard pan/zoom
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      const panStep = 40;
-      const zoomStep = 0.1;
-      if (e.key === "ArrowLeft")
-        updateCanvasState({ panX: canvasState.panX + panStep });
-      if (e.key === "ArrowRight")
-        updateCanvasState({ panX: canvasState.panX - panStep });
-      if (e.key === "ArrowUp")
-        updateCanvasState({ panY: canvasState.panY + panStep });
-      if (e.key === "ArrowDown")
-        updateCanvasState({ panY: canvasState.panY - panStep });
-      if (e.key === "+" || e.key === "=")
-        updateCanvasState({ zoom: Math.min(5, canvasState.zoom + zoomStep) });
-      if (e.key === "-" || e.key === "_")
-        updateCanvasState({ zoom: Math.max(0.1, canvasState.zoom - zoomStep) });
-      if (e.key.toLowerCase() === "0")
-        updateCanvasState({ zoom: 1, panX: 0, panY: 0 });
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [canvasState.panX, canvasState.panY, canvasState.zoom, updateCanvasState]);
-
-  // ===== Edges
+  // ===== Render edges with smooth curves
   const renderEdges = (ctx: CanvasRenderingContext2D, edges: any[]) => {
-    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
     edges.forEach((edge) => {
       if (!edge.path) return;
+
       switch (edge.type) {
         case "spouse":
-          ctx.strokeStyle = "#b45309";
+          ctx.strokeStyle = "#dc2626";
+          ctx.lineWidth = 3;
           ctx.setLineDash([]);
+          ctx.shadowColor = "rgba(220, 38, 38, 0.3)";
+          ctx.shadowBlur = 8;
           break;
         case "adoptive":
         case "step":
-          ctx.strokeStyle = "#374151";
-          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = "#6366f1";
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([8, 6]);
+          ctx.shadowColor = "rgba(99, 102, 241, 0.3)";
+          ctx.shadowBlur = 6;
           break;
         default:
-          ctx.strokeStyle = "#94a3b8";
+          ctx.strokeStyle = "#3b82f6";
+          ctx.lineWidth = 2.5;
           ctx.setLineDash([]);
+          ctx.shadowColor = "rgba(59, 130, 246, 0.3)";
+          ctx.shadowBlur = 6;
       }
+
       ctx.stroke(new Path2D(edge.path));
+      ctx.shadowBlur = 0;
     });
   };
 
-  // ===== Nodes
+  // ===== Render nodes with modern styling
   const renderNodes = (
     ctx: CanvasRenderingContext2D,
     nodes: any[],
@@ -193,78 +212,206 @@ export function TreeCanvas({
     nodes.forEach((node) => {
       const member = members.find((m) => m.id === node.id);
       if (!member) return;
+
       const isSelected = options.selectedNode === node.id;
       const isHighlighted = options.highlightPath?.includes(node.id);
-      ctx.fillStyle = isSelected
-        ? "#1d4ed8"
+      const isHovered = hoveredNode === node.id;
+      const isDragging = draggingNode === node.id;
+      const isHead = member.isHeadOfFamily;
+
+      ctx.save();
+
+      if (isDragging) {
+        ctx.globalAlpha = 0.8;
+      }
+
+      const borderRadius = 12;
+      const x = node.x;
+      const y = node.y;
+      const w = node.width;
+      const h = node.height;
+
+      if (isSelected || isHovered) {
+        ctx.shadowColor = isSelected
+          ? "rgba(59, 130, 246, 0.5)"
+          : "rgba(168, 85, 247, 0.4)";
+        ctx.shadowBlur = isSelected ? 20 : 15;
+        ctx.shadowOffsetY = 4;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(x + borderRadius, y);
+      ctx.lineTo(x + w - borderRadius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + borderRadius);
+      ctx.lineTo(x + w, y + h - borderRadius);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - borderRadius, y + h);
+      ctx.lineTo(x + borderRadius, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - borderRadius);
+      ctx.lineTo(x, y + borderRadius);
+      ctx.quadraticCurveTo(x, y, x + borderRadius, y);
+      ctx.closePath();
+
+      const gradient = ctx.createLinearGradient(x, y, x, y + h);
+      if (isSelected) {
+        gradient.addColorStop(0, "#3b82f6");
+        gradient.addColorStop(1, "#2563eb");
+        ctx.fillStyle = gradient;
+      } else if (isHighlighted) {
+        gradient.addColorStop(0, "#f59e0b");
+        gradient.addColorStop(1, "#d97706");
+        ctx.fillStyle = gradient;
+      } else if (isHovered) {
+        gradient.addColorStop(0, "#a855f7");
+        gradient.addColorStop(1, "#9333ea");
+        ctx.fillStyle = gradient;
+      } else {
+        gradient.addColorStop(0, "#ffffff");
+        gradient.addColorStop(1, "#f8fafc");
+        ctx.fillStyle = gradient;
+      }
+
+      ctx.fill();
+
+      ctx.strokeStyle = isSelected
+        ? "#2563eb"
+        : isHovered
+        ? "#9333ea"
         : isHighlighted
-        ? "#f59e0b"
-        : "#ffffff";
-      ctx.strokeStyle = isSelected ? "#1e40af" : "#94a3b8";
-      ctx.lineWidth = isSelected ? 3 : 1.5;
-      ctx.fillRect(node.x, node.y, node.width, node.height);
-      ctx.strokeRect(node.x, node.y, node.width, node.height);
-      if (options.showNames) {
-        ctx.fillStyle = "#0f172a";
-        ctx.font = "12px system-ui, sans-serif";
+        ? "#d97706"
+        : "#cbd5e1";
+      ctx.lineWidth = isSelected ? 3 : isHovered ? 2.5 : 2;
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      if (isHead) {
+        drawCrown(ctx, x + w / 2, y - 15, 20);
+      }
+
+      if (options.showNames && member.fullName) {
+        const textColor =
+          isSelected || isHighlighted || isHovered ? "#ffffff" : "#0f172a";
+        ctx.fillStyle = textColor;
+        ctx.font = "bold 16px system-ui, -apple-system, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(
-          member.fullName,
-          node.x + node.width / 2,
-          node.y + node.height / 2
-        );
+
+        const name = member.fullName;
+        const maxWidth = w - 20;
+        const metrics = ctx.measureText(name);
+
+        if (metrics.width > maxWidth) {
+          const ellipsis = "...";
+          let truncated = name;
+          while (
+            ctx.measureText(truncated + ellipsis).width > maxWidth &&
+            truncated.length > 0
+          ) {
+            truncated = truncated.slice(0, -1);
+          }
+          ctx.fillText(truncated + ellipsis, x + w / 2, y + h / 2 - 8);
+        } else {
+          ctx.fillText(name, x + w / 2, y + h / 2 - 8);
+        }
+
+        if (member.birthYear || member.deathYear) {
+          ctx.font = "12px system-ui, -apple-system, sans-serif";
+          ctx.fillStyle =
+            isSelected || isHighlighted || isHovered
+              ? "rgba(255,255,255,0.9)"
+              : "#64748b";
+          const dates = `${member.birthYear || "?"} - ${
+            member.deathYear || "Present"
+          }`;
+          ctx.fillText(dates, x + w / 2, y + h / 2 + 12);
+        }
       }
+
+      ctx.restore();
     });
   };
 
-  // ===== Mouse events
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setContextMenu(null);
+  // ===== Render
+  const render = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvasState.width, canvasState.height);
+
+    ctx.save();
+    ctx.translate(canvasState.panX, canvasState.panY);
+    ctx.scale(canvasState.zoom, canvasState.zoom);
+
     const localLayout = buildLayoutFromPositions();
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const worldX =
-      (e.clientX - rect.left - canvasState.panX) / canvasState.zoom;
-    const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
-    const clickedNode = localLayout.nodes.find(
+    renderEdges(ctx, localLayout.edges as any[]);
+    renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
+
+    ctx.restore();
+  }, [members, edges, canvasState, renderOptions, hoveredNode, draggingNode]);
+
+  // ===== Get node at position
+  const getNodeAtPosition = (worldX: number, worldY: number) => {
+    const localLayout = buildLayoutFromPositions();
+    return localLayout.nodes.find(
       (node) =>
         worldX >= node.x &&
         worldX <= node.x + node.width &&
         worldY >= node.y &&
         worldY <= node.y + node.height
     );
+  };
+
+  // ===== Mouse events
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setContextMenu(null);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const worldX =
+      (e.clientX - rect.left - canvasState.panX) / canvasState.zoom;
+    const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
+    const clickedNode = getNodeAtPosition(worldX, worldY);
+
     if (clickedNode) {
       setDraggingNode(clickedNode.id);
       setNodeOffsets({ x: worldX - clickedNode.x, y: worldY - clickedNode.y });
       setSelectedNode(clickedNode.id);
+      onNodeClick?.(clickedNode.id);
     } else {
       setIsDraggingCanvas(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       setLastPan({ x: canvasState.panX, y: canvasState.panY });
+      setSelectedNode(null);
+      onCanvasClick?.();
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const worldX =
+      (e.clientX - rect.left - canvasState.panX) / canvasState.zoom;
+    const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
+
     if (draggingNode) {
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const worldX =
-        (e.clientX - rect.left - canvasState.panX) / canvasState.zoom;
-      const worldY =
-        (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
-      setLayout((prev) => ({
-        ...prev,
-        nodes: prev.nodes.map((n) =>
-          n.id === draggingNode
-            ? { ...n, x: worldX - nodeOffsets.x, y: worldY - nodeOffsets.y }
-            : n
-        ),
-      }));
+      const newX = worldX - nodeOffsets.x;
+      const newY = worldY - nodeOffsets.y;
+
+      const memberToUpdate = members.find((m) => m.id === draggingNode);
+      if (memberToUpdate) {
+        updateMember(draggingNode, { ...memberToUpdate, x: newX, y: newY });
+      }
     } else if (isDraggingCanvas) {
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
       updateCanvasState({ panX: lastPan.x + deltaX, panY: lastPan.y + deltaY });
+    } else {
+      const hoveredNode = getNodeAtPosition(worldX, worldY);
+      setHoveredNode(hoveredNode?.id || null);
     }
   };
 
@@ -274,19 +421,14 @@ export function TreeCanvas({
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
-    const localLayout = buildLayoutFromPositions();
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
+
     const worldX =
       (e.clientX - rect.left - canvasState.panX) / canvasState.zoom;
     const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
-    const clickedNode = localLayout.nodes.find(
-      (node) =>
-        worldX >= node.x &&
-        worldX <= node.x + node.width &&
-        worldY >= node.y &&
-        worldY <= node.y + node.height
-    );
+    const clickedNode = getNodeAtPosition(worldX, worldY);
+
     if (clickedNode) {
       setEditingNode(clickedNode.id);
       onNodeDoubleClick?.(clickedNode.id);
@@ -295,19 +437,14 @@ export function TreeCanvas({
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    const localLayout = buildLayoutFromPositions();
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
+
     const worldX =
       (e.clientX - rect.left - canvasState.panX) / canvasState.zoom;
     const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
-    const clickedNode = localLayout.nodes.find(
-      (node) =>
-        worldX >= node.x &&
-        worldX <= node.x + node.width &&
-        worldY >= node.y &&
-        worldY <= node.y + node.height
-    );
+    const clickedNode = getNodeAtPosition(worldX, worldY);
+
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
@@ -317,13 +454,81 @@ export function TreeCanvas({
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const zoomFactor = 0.1;
-    const newZoom = Math.max(
-      0.1,
-      Math.min(5, canvasState.zoom - e.deltaY * zoomFactor * 0.001)
-    );
-    updateCanvasState({ zoom: newZoom });
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const worldX = (mouseX - canvasState.panX) / canvasState.zoom;
+    const worldY = (mouseY - canvasState.panY) / canvasState.zoom;
+
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    const newZoom = Math.max(0.1, Math.min(5, canvasState.zoom * zoomFactor));
+
+    const newPanX = mouseX - worldX * newZoom;
+    const newPanY = mouseY - worldY * newZoom;
+
+    updateCanvasState({ zoom: newZoom, panX: newPanX, panY: newPanY });
   };
+
+  const toggleHeadOfFamily = (nodeId: string) => {
+    const member = members.find((m) => m.id === nodeId);
+    if (member) {
+      updateMember(nodeId, {
+        ...member,
+        isHeadOfFamily: !member.isHeadOfFamily,
+      });
+    }
+    setContextMenu(null);
+  };
+
+  // ===== Keyboard controls
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      const panStep = 50;
+      const zoomStep = 0.15;
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        updateCanvasState({ panX: canvasState.panX + panStep });
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        updateCanvasState({ panX: canvasState.panX - panStep });
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        updateCanvasState({ panY: canvasState.panY + panStep });
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        updateCanvasState({ panY: canvasState.panY - panStep });
+      }
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        updateCanvasState({ zoom: Math.min(5, canvasState.zoom + zoomStep) });
+      }
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        updateCanvasState({ zoom: Math.max(0.1, canvasState.zoom - zoomStep) });
+      }
+      if (e.key === "0") {
+        e.preventDefault();
+        updateCanvasState({ zoom: 1, panX: 0, panY: 0 });
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [canvasState, updateCanvasState]);
 
   // ===== Render trigger
   useEffect(() => {
@@ -333,7 +538,10 @@ export function TreeCanvas({
   return (
     <div
       ref={containerRef}
-      className={cn("relative w-full h-full bg-gray-50", className)}
+      className={cn(
+        "relative w-full h-full bg-gradient-to-br from-slate-50 to-blue-50",
+        className
+      )}
     >
       <canvas
         ref={canvasRef}
@@ -341,60 +549,90 @@ export function TreeCanvas({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
         onWheel={handleWheel}
         style={{ touchAction: "none" }}
       />
 
-      {/* Zoom controls */}
-      <div className="absolute top-4 right-4 flex flex-col gap-2">
+      {/* Enhanced zoom controls */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg border border-gray-200">
         <button
           onClick={() =>
             updateCanvasState({ zoom: Math.min(5, canvasState.zoom + 0.2) })
           }
-          className="w-8 h-8 bg-white border rounded shadow-sm"
+          className="w-10 h-10 bg-white hover:bg-blue-50 border border-gray-300 rounded-lg shadow-sm transition-all hover:shadow-md hover:scale-105 font-bold text-lg"
+          title="Zoom In"
         >
           +
         </button>
+        <div className="text-center text-xs font-medium text-gray-600 py-1">
+          {Math.round(canvasState.zoom * 100)}%
+        </div>
         <button
           onClick={() =>
             updateCanvasState({ zoom: Math.max(0.1, canvasState.zoom - 0.2) })
           }
-          className="w-8 h-8 bg-white border rounded shadow-sm"
+          className="w-10 h-10 bg-white hover:bg-blue-50 border border-gray-300 rounded-lg shadow-sm transition-all hover:shadow-md hover:scale-105 font-bold text-lg"
+          title="Zoom Out"
         >
           −
         </button>
+        <div className="h-px bg-gray-300 my-1" />
         <button
           onClick={() => updateCanvasState({ zoom: 1, panX: 0, panY: 0 })}
-          className="w-8 h-8 bg-white border rounded shadow-sm text-xs"
+          className="w-10 h-10 bg-white hover:bg-blue-50 border border-gray-300 rounded-lg shadow-sm transition-all hover:shadow-md hover:scale-105 text-lg"
+          title="Reset View"
         >
           ⌂
         </button>
       </div>
 
-      {/* Context menu */}
+      {/* Enhanced context menu */}
       {contextMenu && (
         <div
-          className="absolute bg-white border rounded shadow p-2 text-sm"
+          className="absolute bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-xl py-1 text-sm min-w-[160px]"
           style={{ top: contextMenu.y, left: contextMenu.x }}
+          onMouseLeave={() => setContextMenu(null)}
         >
           {contextMenu.nodeId ? (
             <>
-              <button className="block w-full text-left hover:bg-gray-100 px-2 py-1">
-                Edit
+              <button
+                onClick={() => {
+                  setEditingNode(contextMenu.nodeId!);
+                  setContextMenu(null);
+                }}
+                className="block w-full text-left hover:bg-blue-50 px-4 py-2 transition-colors"
+              >
+                ✏️ Edit Member
               </button>
-              <button className="block w-full text-left hover:bg-gray-100 px-2 py-1">
-                Delete
+              <button
+                onClick={() => toggleHeadOfFamily(contextMenu.nodeId!)}
+                className="block w-full text-left hover:bg-yellow-50 px-4 py-2 transition-colors"
+              >
+                👑 Toggle Head of Family
+              </button>
+              <div className="h-px bg-gray-200 my-1" />
+              <button className="block w-full text-left hover:bg-red-50 px-4 py-2 transition-colors text-red-600">
+                🗑️ Delete Member
               </button>
             </>
           ) : (
-            <button className="block w-full text-left hover:bg-gray-100 px-2 py-1">
-              Add Member
+            <button className="block w-full text-left hover:bg-green-50 px-4 py-2 transition-colors">
+              ➕ Add Member
             </button>
           )}
         </div>
       )}
+
+      {/* Info panel */}
+      <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg border border-gray-200 text-xs text-gray-600">
+        <div className="font-medium">Controls:</div>
+        <div>🖱️ Drag nodes to reposition • Drag canvas to pan</div>
+        <div>🔍 Scroll to zoom • Arrow keys to pan</div>
+        <div>👆 Double-click to edit • Right-click for menu</div>
+      </div>
     </div>
   );
 }
