@@ -16,6 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, Save, Trash2, Crown } from "lucide-react";
+import { useState as useReactState } from "react";
 
 interface NodeEditorProps {
   nodeId: string | null;
@@ -82,6 +83,41 @@ export function NodeEditor({
     };
     updateMember(member.id, updated);
     onSave(updated);
+  };
+
+  const [isUploading, setIsUploading] = useReactState(false);
+  const [uploadError, setUploadError] = useReactState<string | null>(null);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!member) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const form = new FormData();
+      form.append("userId", member.id.split("_")[0] || ""); // simple placeholder; replace with owner
+      form.append("memberId", member.id);
+      form.append("file", file);
+      const resp = await fetch("/api/family-tree/media", {
+        method: "POST",
+        body: form,
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error || "Upload failed");
+      const mediaUrls = Array.isArray(member.mediaUrls) ? member.mediaUrls : [];
+      const updated: FamilyMember = {
+        ...member,
+        mediaUrls: [...mediaUrls, data.url],
+        updatedAt: new Date().toISOString(),
+      };
+      updateMember(member.id, updated);
+      onSave(updated);
+    } catch (err: any) {
+      setUploadError(err?.message || "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleDelete = () => {
@@ -211,6 +247,50 @@ export function NodeEditor({
             placeholder="Additional information, stories, etc."
             rows={3}
           />
+        </div>
+
+        {/* Media */}
+        <div>
+          <Label>Media Attachments</Label>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="file"
+              accept="image/*,audio/*,video/*"
+              onChange={handleUpload}
+            />
+            {isUploading && (
+              <span className="text-xs text-muted-foreground">
+                Uploading...
+              </span>
+            )}
+            {uploadError && (
+              <span className="text-xs text-destructive">{uploadError}</span>
+            )}
+          </div>
+          {Array.isArray(member.mediaUrls) && member.mediaUrls.length > 0 && (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {member.mediaUrls.map((url, idx) => (
+                <div key={idx} className="border rounded overflow-hidden">
+                  {/* naive preview */}
+                  {url.startsWith("data:image") ? (
+                    <img
+                      src={url}
+                      alt="media"
+                      className="w-full h-20 object-cover"
+                    />
+                  ) : (
+                    <a
+                      href={url}
+                      target="_blank"
+                      className="text-xs p-2 block truncate"
+                    >
+                      {url.slice(0, 40)}
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Actions */}

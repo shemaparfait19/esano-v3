@@ -26,6 +26,14 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Heart } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 
 export default function FamilyTreePage() {
   const { user } = useAuth();
@@ -56,6 +64,20 @@ export default function FamilyTreePage() {
   const [newRelationship, setNewRelationship] = useState<Partial<FamilyEdge>>(
     {}
   );
+  const [presence, setPresence] = useState<
+    Array<{
+      id: string;
+      name?: string;
+      color?: string;
+      x?: number;
+      y?: number;
+      lastActive?: string;
+    }>
+  >([]);
+  const [containerRect, setContainerRect] = useState<{
+    left: number;
+    top: number;
+  }>({ left: 0, top: 0 });
 
   // Load family tree on mount
   useEffect(() => {
@@ -253,6 +275,53 @@ export default function FamilyTreePage() {
     }
   };
 
+  // Realtime presence (basic): write self presence and read others
+  useEffect(() => {
+    if (!user?.uid) return;
+    const viewport = document.getElementById("tree-viewport");
+    const updateRect = () => {
+      const r = viewport?.getBoundingClientRect();
+      if (r) setContainerRect({ left: r.left, top: r.top });
+    };
+    updateRect();
+    window.addEventListener("resize", updateRect);
+    return () => window.removeEventListener("resize", updateRect);
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const presCol = collection(db, "familyTrees", user.uid, "presence");
+    const unsub = onSnapshot(presCol, (snap) => {
+      const items = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as any) }))
+        .filter((p) => p.id !== user.uid);
+      setPresence(items);
+    });
+    return () => unsub();
+  }, [user?.uid]);
+
+  // Track cursor and write to presence (throttled)
+  const [lastPresenceWrite, setLastPresenceWrite] = useState<number>(0);
+  const writePresence = async (worldX: number, worldY: number) => {
+    if (!user?.uid) return;
+    const now = Date.now();
+    if (now - lastPresenceWrite < 150) return; // throttle
+    setLastPresenceWrite(now);
+    try {
+      await setDoc(
+        doc(db, "familyTrees", user.uid, "presence", user.uid),
+        {
+          name: user.displayName || "Me",
+          color: "#10b981",
+          x: worldX,
+          y: worldY,
+          lastActive: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch {}
+  };
+
   const handleToggleFullscreen = () => {
     setFullscreen(!isFullscreen);
   };
@@ -310,6 +379,7 @@ export default function FamilyTreePage() {
           onNodeClick={handleNodeClick}
           onNodeDoubleClick={handleNodeDoubleClick}
           onCanvasClick={handleCanvasClick}
+          presence={presence}
           className="w-full h-full"
         />
 

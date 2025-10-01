@@ -11,6 +11,7 @@ export interface FamilyMember {
   gender?: "male" | "female" | "other";
   tags: string[];
   avatarUrl?: string;
+  mediaUrls?: string[];
   notes?: string;
   location?: string;
   customFields: Record<string, any>;

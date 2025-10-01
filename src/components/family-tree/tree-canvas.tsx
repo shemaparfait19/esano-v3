@@ -21,6 +21,13 @@ interface TreeCanvasProps {
   onNodeClick?: (nodeId: string) => void;
   onNodeDoubleClick?: (nodeId: string) => void;
   onCanvasClick?: () => void;
+  presence?: Array<{
+    id: string;
+    name?: string;
+    color?: string;
+    x?: number;
+    y?: number;
+  }>;
 }
 
 export function TreeCanvas({
@@ -28,6 +35,7 @@ export function TreeCanvas({
   onNodeClick,
   onNodeDoubleClick,
   onCanvasClick,
+  presence,
 }: TreeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -350,7 +358,37 @@ export function TreeCanvas({
     renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
 
     ctx.restore();
-  }, [members, edges, canvasState, renderOptions, hoveredNode, draggingNode]);
+    // Draw presence cursors overlay
+    if (presence && presence.length > 0) {
+      ctx.save();
+      ctx.translate(canvasState.panX, canvasState.panY);
+      ctx.scale(canvasState.zoom, canvasState.zoom);
+      presence.forEach((p) => {
+        if (typeof p.x !== "number" || typeof p.y !== "number") return;
+        ctx.fillStyle = p.color || "#10b981";
+        ctx.strokeStyle = "#065f46";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (p.name) {
+          ctx.font = "12px system-ui, -apple-system, sans-serif";
+          ctx.fillStyle = "#111827";
+          ctx.fillText(p.name, p.x + 10, p.y - 10);
+        }
+      });
+      ctx.restore();
+    }
+  }, [
+    members,
+    edges,
+    canvasState,
+    renderOptions,
+    hoveredNode,
+    draggingNode,
+    presence,
+  ]);
 
   // ===== Get node at position
   const getNodeAtPosition = (worldX: number, worldY: number) => {
