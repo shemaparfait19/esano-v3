@@ -37,15 +37,14 @@ export default function FloatingAssistant({
               <SheetTrigger asChild>
                 <Button
                   aria-label="Open eSANO Assistant"
-                  className="h-14 w-14 rounded-full p-0 shadow-lg border bg-white hover:scale-105 transition-transform"
-                  variant="outline"
+                  className="h-24 w-24 p-0 shadow-lg bg-transparent hover:scale-105 transition-transform border-0"
+                  variant="ghost"
                 >
-                  {/* Fallback circle if GIF missing */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={gifSrc}
                     alt="eSANO Assistant"
-                    className="h-12 w-12 rounded-full object-cover"
+                    className="h-24 w-24 object-contain"
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).style.display =
                         "none";
