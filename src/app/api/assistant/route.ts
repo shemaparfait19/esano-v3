@@ -181,6 +181,22 @@ export async function POST(req: Request) {
             }
           }
         } catch {}
+        const relationTypes = [
+          "parent",
+          "spouse",
+          "adoptive",
+          "step",
+          "big_sister",
+          "little_sister",
+          "big_brother",
+          "little_brother",
+          "aunt",
+          "uncle",
+          "cousin_big",
+          "cousin_little",
+          "guardian",
+          "other",
+        ];
         const ctx = {
           scope: scope || "own",
           subjectUserId,
@@ -241,6 +257,11 @@ export async function POST(req: Request) {
           connections: connectionsSummary,
           messages: messagesSummary,
           kinship,
+          capabilities: {
+            relationTypes,
+            headOfFamily: true,
+            suggestApi: true,
+          },
         };
         userContext = JSON.stringify(ctx);
       } catch {}

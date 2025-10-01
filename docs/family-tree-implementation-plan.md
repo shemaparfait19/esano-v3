@@ -46,7 +46,7 @@ Phase 1 - MVP (Weeks 1–6)
 3. Persistence
    - Load/save to `familyTrees/{ownerUserId}`; optimistic UI; undo/redo (client history) for session.
 4. Export (basic)
-   - PNG/PDF export from current viewport.
+   - PNG export from current viewport (done). PDF pending.
 5. Accessibility & Perf guards
    - Keyboard pan/zoom shortcuts; focus styles; initial tree load <2s for 200 nodes.
 
@@ -56,16 +56,23 @@ Phase 2 - Enhanced (Weeks 7–12)
    - Strategy selector: Classic (default), Radial/Fan (ancestors), Timeline (life events). Separate layout engines.
 2. Advanced Editing
    - Toolbar with draggable templates; react-dnd; fullscreen mode with side panel tools.
-   - Node profile modal: photo upload, notes, audio recording; custom tags/icons; quick shortcuts.
+   - Node profile modal: photo upload (added basic media upload), notes, audio recording; custom tags/icons; quick shortcuts.
    - Styling: branch color-coding; highlight lineage paths; custom node shapes/sizes.
 3. AI Assistance (HIGH)
-   - Smart Suggestions: link prompts, role predictions, missing data detection; confidence badges.
-   - Auto-Completion: placeholder parents/children; surname/location fill.
-   - Conflict Resolution: date/age validation with rule engine; AI fallback.
+   - Smart Suggestions: backend API added (/api/family-tree/suggest) with suggestions + conflicts; UI pending.
+   - Auto-Completion: placeholder parents/children; surname/location fill. (pending)
+   - Conflict Resolution: date/age validation with rule engine (added basic checks); AI fallback. (partial)
 4. Collaboration (HIGH)
-   - Basic realtime multi-user editing via Firestore listeners; cursor presence; conflict resolution semantics.
+   - Basic realtime presence/cursors: rendering wired; presence feed scaffolded. (partial)
+   - Multi-user editing & conflict semantics. (pending)
 5. Media & Memories (MEDIUM)
-   - Attach media to nodes/branches; gallery; optional face recognition tagging pipeline.
+   - Attach media to nodes (added basic upload); gallery (basic preview); optional face recognition tagging pipeline (pending).
+     Status Summary (current)
+
+- Phase 1 MVP largely complete: canvas pan/zoom, persistent positions, editing, undo/redo, PNG export, keyboard accessibility, deterministic layout anchor, orphans visible.
+- New features added: Head of Family flag (with crown), extended relationships, AI kinship enrichment, suggestions/conflict API, presence cursors (partial), media upload (basic).
+- Pending to close Phase 1 fully: PDF export, perf validation.
+- Phase 2 work in progress: suggestions UI, collaboration presence refinement, media gallery, view modes.
 
 Phase 3 - Advanced (Weeks 13–16)
 
