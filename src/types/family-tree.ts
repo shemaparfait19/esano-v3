@@ -5,6 +5,7 @@ export interface FamilyMember {
   lastName: string;
   x?: number;
   y?: number;
+  isHeadOfFamily?: boolean;
   birthDate?: string;
   deathDate?: string;
   gender?: "male" | "female" | "other";
@@ -21,7 +22,21 @@ export interface FamilyEdge {
   id: string;
   fromId: string;
   toId: string;
-  type: "parent" | "spouse" | "adoptive" | "step";
+  type:
+    | "parent"
+    | "spouse"
+    | "adoptive"
+    | "step"
+    | "big_sister"
+    | "little_sister"
+    | "big_brother"
+    | "little_brother"
+    | "aunt"
+    | "uncle"
+    | "cousin_big"
+    | "cousin_little"
+    | "guardian"
+    | "other";
   metadata: {
     strength?: number;
     createdAt: string;

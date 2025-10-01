@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { X, Save, Trash2 } from "lucide-react";
+import { X, Save, Trash2, Crown } from "lucide-react";
 
 interface NodeEditorProps {
   nodeId: string | null;
@@ -71,6 +71,17 @@ export function NodeEditor({
     updateMember(member.id, updatedMember);
     onSave(updatedMember);
     setIsDirty(false);
+  };
+
+  const toggleHead = () => {
+    if (!member) return;
+    const updated: FamilyMember = {
+      ...member,
+      isHeadOfFamily: !member.isHeadOfFamily,
+      updatedAt: new Date().toISOString(),
+    };
+    updateMember(member.id, updated);
+    onSave(updated);
   };
 
   const handleDelete = () => {
@@ -204,6 +215,15 @@ export function NodeEditor({
 
         {/* Actions */}
         <div className="flex gap-2 pt-4">
+          <Button
+            type="button"
+            variant={member.isHeadOfFamily ? "default" : "outline"}
+            onClick={toggleHead}
+            className="flex-1"
+          >
+            <Crown className="h-4 w-4 mr-2" />
+            {member.isHeadOfFamily ? "Head of Family" : "Set as Head"}
+          </Button>
           <Button onClick={handleSave} disabled={!isDirty} className="flex-1">
             <Save className="h-4 w-4 mr-2" />
             Save Changes

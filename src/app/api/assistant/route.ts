@@ -161,9 +161,26 @@ export async function POST(req: Request) {
             createdAt: m.createdAt,
           }));
         } catch {}
-        const kinship = subjectUserId
+        let kinship = subjectUserId
           ? await buildKinshipFacts(subjectUserId)
           : [];
+        // Prepend head-of-family fact when available
+        try {
+          const headSnap = await adminDb
+            .collection("familyTrees")
+            .doc(subjectUserId!)
+            .get();
+          if (headSnap.exists) {
+            const t = headSnap.data() as any;
+            const head = (t.members || []).find((m: any) => m.isHeadOfFamily);
+            if (head?.fullName) {
+              kinship = [
+                `${head.fullName} is the head of the family.`,
+                ...kinship,
+              ];
+            }
+          }
+        } catch {}
         const ctx = {
           scope: scope || "own",
           subjectUserId,

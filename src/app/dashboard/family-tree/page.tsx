@@ -488,6 +488,18 @@ export default function FamilyTreePage() {
                   <SelectItem value="spouse">Spouse</SelectItem>
                   <SelectItem value="adoptive">Adoptive</SelectItem>
                   <SelectItem value="step">Step</SelectItem>
+                  <SelectItem value="big_sister">Big Sister</SelectItem>
+                  <SelectItem value="little_sister">Little Sister</SelectItem>
+                  <SelectItem value="big_brother">Big Brother</SelectItem>
+                  <SelectItem value="little_brother">Little Brother</SelectItem>
+                  <SelectItem value="aunt">Aunt</SelectItem>
+                  <SelectItem value="uncle">Uncle</SelectItem>
+                  <SelectItem value="cousin_big">Cousin (Older)</SelectItem>
+                  <SelectItem value="cousin_little">
+                    Cousin (Younger)
+                  </SelectItem>
+                  <SelectItem value="guardian">Guardian</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
