@@ -8,7 +8,6 @@ import {
   selectLayout,
   selectCanvasState,
 } from "@/lib/family-tree-store";
-import { ClassicLayoutEngine } from "@/lib/layout-engines/classic-layout";
 import {
   FamilyMember,
   FamilyEdge,
@@ -48,16 +47,52 @@ export function TreeCanvas({
     renderOptions,
   } = useFamilyTreeStore();
 
-  // Layout engine
-  const layoutEngine = useRef(new ClassicLayoutEngine());
-
-  // Calculate layout when data changes
-  useEffect(() => {
-    if (members.length > 0) {
-      const newLayout = layoutEngine.current.layout(members, edges);
-      setLayout(newLayout);
-    }
-  }, [members, edges, setLayout]);
+  // Build a layout from persisted positions; never overwrite saved x/y.
+  const buildLayoutFromPositions = () => {
+    // Stable ordering for default placement of undefined positions
+    const sorted = [...members].sort((a, b) =>
+      (a.id || "").localeCompare(b.id || "")
+    );
+    const nodeWidth = 180;
+    const nodeHeight = 80;
+    const gridX = 220;
+    const gridY = 140;
+    const nodes = sorted.map((m, i) => {
+      const x = typeof m.x === "number" ? m.x : 120 + (i % 5) * gridX;
+      const y = typeof m.y === "number" ? m.y : 120 + Math.floor(i / 5) * gridY;
+      return { id: m.id, x, y, width: nodeWidth, height: nodeHeight };
+    });
+    const nodeById: Record<string, any> = Object.fromEntries(
+      nodes.map((n) => [n.id, n])
+    );
+    const edgePaths = edges.map((e) => {
+      const a = nodeById[e.fromId];
+      const b = nodeById[e.toId];
+      if (!a || !b)
+        return {
+          id: e.id,
+          fromId: e.fromId,
+          toId: e.toId,
+          path: "",
+          type: e.type,
+        };
+      const fromX = a.x + a.width / 2;
+      const fromY = a.y + a.height / 2;
+      const toX = b.x + b.width / 2;
+      const toY = b.y + b.height / 2;
+      const path =
+        e.type === "spouse"
+          ? `M ${fromX} ${fromY} L ${toX} ${toY}`
+          : (() => {
+              const midY = (fromY + toY) / 2;
+              const c1 = fromY + (midY - fromY) * 0.5;
+              const c2 = toY - (toY - midY) * 0.5;
+              return `M ${fromX} ${fromY} C ${fromX} ${c1} ${toX} ${c2} ${toX} ${toY}`;
+            })();
+      return { id: e.id, fromId: e.fromId, toId: e.toId, path, type: e.type };
+    });
+    return { nodes, edges: edgePaths };
+  };
 
   // Handle canvas resize
   useEffect(() => {
@@ -91,7 +126,7 @@ export function TreeCanvas({
   // Render function
   const render = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !layout) return;
+    if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -104,14 +139,16 @@ export function TreeCanvas({
     ctx.translate(canvasState.panX, canvasState.panY);
     ctx.scale(canvasState.zoom, canvasState.zoom);
 
+    // Compute layout from positions
+    const localLayout = buildLayoutFromPositions();
     // Render edges first (behind nodes)
-    renderEdges(ctx, layout.edges);
+    renderEdges(ctx, localLayout.edges as any[]);
 
     // Render nodes
-    renderNodes(ctx, layout.nodes, members, renderOptions);
+    renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
 
     ctx.restore();
-  }, [layout, members, canvasState, renderOptions]);
+  }, [members, edges, canvasState, renderOptions]);
 
   // Keyboard navigation for pan/zoom
   useEffect(() => {
@@ -272,7 +309,7 @@ export function TreeCanvas({
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
-    if (!layout) return;
+    const localLayout = buildLayoutFromPositions();
 
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -283,7 +320,7 @@ export function TreeCanvas({
     const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
 
     // Find clicked node
-    const clickedNode = layout.nodes.find(
+    const clickedNode = localLayout.nodes.find(
       (node) =>
         worldX >= node.x &&
         worldX <= node.x + node.width &&
@@ -301,7 +338,7 @@ export function TreeCanvas({
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
-    if (!layout) return;
+    const localLayout = buildLayoutFromPositions();
 
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -310,7 +347,7 @@ export function TreeCanvas({
       (e.clientX - rect.left - canvasState.panX) / canvasState.zoom;
     const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
 
-    const clickedNode = layout.nodes.find(
+    const clickedNode = localLayout.nodes.find(
       (node) =>
         worldX >= node.x &&
         worldX <= node.x + node.width &&
