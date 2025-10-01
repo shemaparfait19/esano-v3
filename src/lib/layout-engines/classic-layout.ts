@@ -131,17 +131,42 @@ export class ClassicLayoutEngine {
       (node) => node.parents.length === 0
     );
 
-    if (rootNodes.length === 0) {
-      // If no clear roots, use nodes with the most children as roots
-      const sortedByChildren = Array.from(this.nodes.values()).sort(
-        (a, b) => b.children.length - a.children.length
+    // Choose deterministic anchor: earliest birthDate, then highest out-degree, then id
+    const pickAnchor = (nodes: LayoutNode[]): LayoutNode => {
+      const score = (n: LayoutNode) => {
+        const bd = n.member.birthDate
+          ? Date.parse(n.member.birthDate)
+          : Number.MAX_SAFE_INTEGER;
+        const out = n.children.length;
+        return { bd, out, id: n.id };
+      };
+      return nodes.slice().sort((a, b) => {
+        const sa = score(a);
+        const sb = score(b);
+        if (sa.bd !== sb.bd) return sa.bd - sb.bd;
+        if (sb.out !== sa.out) return sb.out - sa.out;
+        return sa.id.localeCompare(sb.id);
+      })[0];
+    };
+
+    const anchors: LayoutNode[] = [];
+    if (rootNodes.length > 0) {
+      anchors.push(pickAnchor(rootNodes));
+    } else {
+      // If no clear roots, use node with most children as anchor (deterministic tie-breaker by id)
+      anchors.push(
+        Array.from(this.nodes.values())
+          .slice()
+          .sort(
+            (a, b) =>
+              b.children.length - a.children.length || a.id.localeCompare(b.id)
+          )[0]
       );
-      rootNodes.push(sortedByChildren[0]);
     }
 
-    // BFS to assign levels
+    // BFS to assign levels from chosen anchors
     const visited = new Set<string>();
-    const queue: { node: LayoutNode; level: number }[] = rootNodes.map(
+    const queue: { node: LayoutNode; level: number }[] = anchors.map(
       (node) => ({ node, level: 0 })
     );
 

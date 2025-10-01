@@ -1,6 +1,39 @@
 import { NextResponse } from "next/server";
 import { askGenealogyAssistant } from "@/ai/flows/ai-genealogy-assistant";
 import { adminDb } from "@/lib/firebase-admin";
+async function buildKinshipFacts(userId: string) {
+  try {
+    const treeSnap = await adminDb.collection("familyTrees").doc(userId).get();
+    if (!treeSnap.exists) return [] as string[];
+    const tree = treeSnap.data() as any;
+    const members: Record<string, any> = Object.fromEntries(
+      (tree.members || []).map((m: any) => [m.id, m])
+    );
+    const edges: any[] = tree.edges || [];
+
+    const parentsOf = new Map<string, string[]>();
+    edges.forEach((e: any) => {
+      if (e.type === "parent") {
+        parentsOf.set(e.toId, [...(parentsOf.get(e.toId) || []), e.fromId]);
+      }
+    });
+
+    const facts: string[] = [];
+    (parentsOf.get(userId) || []).forEach((pid) => {
+      const p = members[pid];
+      if (p?.fullName) facts.push(`${p.fullName} is my parent.`);
+    });
+    (parentsOf.get(userId) || []).forEach((pid) => {
+      (parentsOf.get(pid) || []).forEach((gpid) => {
+        const gp = members[gpid];
+        if (gp?.fullName) facts.push(`${gp.fullName} is my grandparent.`);
+      });
+    });
+    return facts.slice(0, 50);
+  } catch {
+    return [] as string[];
+  }
+}
 
 export const runtime = "nodejs"; // ensure Node runtime (not edge)
 export const dynamic = "force-dynamic"; // avoid caching
@@ -128,6 +161,9 @@ export async function POST(req: Request) {
             createdAt: m.createdAt,
           }));
         } catch {}
+        const kinship = subjectUserId
+          ? await buildKinshipFacts(subjectUserId)
+          : [];
         const ctx = {
           scope: scope || "own",
           subjectUserId,
@@ -187,6 +223,7 @@ export async function POST(req: Request) {
             : undefined,
           connections: connectionsSummary,
           messages: messagesSummary,
+          kinship,
         };
         userContext = JSON.stringify(ctx);
       } catch {}

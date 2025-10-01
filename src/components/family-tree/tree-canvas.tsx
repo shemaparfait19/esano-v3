@@ -139,8 +139,8 @@ export function TreeCanvas({
 
   // Render edges
   const renderEdges = (ctx: CanvasRenderingContext2D, edges: any[]) => {
-    ctx.strokeStyle = "#94a3b8";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#64748b"; // increased contrast
+    ctx.lineWidth = 2.5;
     ctx.setLineDash([]);
 
     edges.forEach((edge) => {
@@ -149,12 +149,12 @@ export function TreeCanvas({
       // Different styles for different edge types
       switch (edge.type) {
         case "spouse":
-          ctx.strokeStyle = "#f59e0b";
+          ctx.strokeStyle = "#b45309"; // darker spouse line
           ctx.setLineDash([]);
           break;
         case "adoptive":
         case "step":
-          ctx.strokeStyle = "#6b7280";
+          ctx.strokeStyle = "#374151"; // darker dashed lines for step/adoptive
           ctx.setLineDash([5, 5]);
           break;
         default:
@@ -184,12 +184,12 @@ export function TreeCanvas({
 
       // Node background
       ctx.fillStyle = isSelected
-        ? "#3b82f6"
+        ? "#1d4ed8"
         : isHighlighted
-        ? "#fbbf24"
+        ? "#f59e0b"
         : "#ffffff";
-      ctx.strokeStyle = isSelected ? "#1d4ed8" : "#e5e7eb";
-      ctx.lineWidth = isSelected ? 3 : 1;
+      ctx.strokeStyle = isSelected ? "#1e40af" : "#94a3b8";
+      ctx.lineWidth = isSelected ? 3 : 1.5;
 
       ctx.fillRect(node.x, node.y, node.width, node.height);
       ctx.strokeRect(node.x, node.y, node.width, node.height);
@@ -203,7 +203,7 @@ export function TreeCanvas({
 
       // Name
       if (options.showNames) {
-        ctx.fillStyle = "#1f2937";
+        ctx.fillStyle = "#0f172a"; // darker text
         ctx.font = "12px system-ui, -apple-system, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -214,7 +214,7 @@ export function TreeCanvas({
 
       // Dates
       if (options.showDates && (member.birthDate || member.deathDate)) {
-        ctx.fillStyle = "#6b7280";
+        ctx.fillStyle = "#334155"; // darker date text
         ctx.font = "10px system-ui, -apple-system, sans-serif";
 
         let dateText = "";
