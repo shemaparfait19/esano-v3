@@ -107,6 +107,27 @@ export async function POST(req: Request) {
         }
 
         const p: any = profile || undefined;
+        // Include a lightweight messages summary for personalization
+        let messagesSummary: any[] | undefined = undefined;
+        try {
+          const msgSnap = await adminDb.collection("messages").get();
+          const relevant = msgSnap.docs
+            .map((d) => ({ id: d.id, ...(d.data() as any) }))
+            .filter(
+              (m) =>
+                m.senderId === subjectUserId || m.receiverId === subjectUserId
+            )
+            .sort((a, b) =>
+              (b.createdAt || "").localeCompare(a.createdAt || "")
+            )
+            .slice(0, 20);
+          messagesSummary = relevant.map((m) => ({
+            peerId: m.senderId === subjectUserId ? m.receiverId : m.senderId,
+            direction: m.senderId === subjectUserId ? "out" : "in",
+            text: typeof m.text === "string" ? m.text.slice(0, 500) : "",
+            createdAt: m.createdAt,
+          }));
+        } catch {}
         const ctx = {
           scope: scope || "own",
           subjectUserId,
@@ -165,6 +186,7 @@ export async function POST(req: Request) {
               }
             : undefined,
           connections: connectionsSummary,
+          messages: messagesSummary,
         };
         userContext = JSON.stringify(ctx);
       } catch {}

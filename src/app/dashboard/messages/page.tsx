@@ -273,6 +273,9 @@ export default function MessagesPage() {
               >
                 <div className="inline-block bg-muted rounded px-2 py-1 text-sm max-w-[75%]">
                   {m.text}
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    {new Date(m.createdAt).toLocaleString()}
+                  </div>
                   {m.senderId === user?.uid && (
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       {m.isRead ? "seen" : m.delivered ? "delivered" : "sent"}

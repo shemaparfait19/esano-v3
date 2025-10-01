@@ -1,44 +1,150 @@
-import { NextResponse } from "next/server";
-import {
-  addFamilyMember,
-  getFamilyTree,
-  linkFamilyRelation,
-} from "@/app/actions";
+import { NextRequest, NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase-admin";
+import { FamilyTree } from "@/types/family-tree";
 
-export async function GET(req: Request) {
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// GET /api/family-tree - Load user's family tree
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
-    if (!userId)
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
-    const tree = await getFamilyTree(userId);
-    return NextResponse.json({ tree });
-  } catch (e) {
-    return NextResponse.json({ error: "Failed to load tree" }, { status: 500 });
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const treeDoc = await adminDb.collection("familyTrees").doc(userId).get();
+
+    if (!treeDoc.exists) {
+      // Return empty tree structure
+      const emptyTree: FamilyTree = {
+        id: userId,
+        ownerId: userId,
+        members: [],
+        edges: [],
+        settings: {
+          colorScheme: "default",
+          viewMode: "classic",
+          layout: "horizontal",
+          branchColors: {},
+          nodeStyles: {},
+        },
+        annotations: [],
+        version: {
+          current: 1,
+          history: [],
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      return NextResponse.json({ tree: emptyTree });
+    }
+
+    const treeData = treeDoc.data() as FamilyTree;
+    return NextResponse.json({ tree: treeData });
+  } catch (error) {
+    console.error("Error loading family tree:", error);
+    return NextResponse.json(
+      { error: "Failed to load family tree" },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(req: Request) {
+// POST /api/family-tree - Save user's family tree
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json();
-    if (body.type === "member") {
-      const { ownerUserId, member } = body;
-      if (!ownerUserId || !member)
-        return NextResponse.json({ error: "Missing params" }, { status: 400 });
-      const updated = await addFamilyMember(ownerUserId, member);
-      return NextResponse.json({ tree: updated });
+    const body = await request.json();
+    const { userId, tree } = body;
+
+    if (!userId || !tree) {
+      return NextResponse.json(
+        { error: "User ID and tree data are required" },
+        { status: 400 }
+      );
     }
-    if (body.type === "edge") {
-      const { ownerUserId, edge } = body;
-      if (!ownerUserId || !edge)
-        return NextResponse.json({ error: "Missing params" }, { status: 400 });
-      const updated = await linkFamilyRelation(ownerUserId, edge);
-      return NextResponse.json({ tree: updated });
+
+    // Validate tree structure
+    if (!tree.members || !Array.isArray(tree.members)) {
+      return NextResponse.json(
+        { error: "Invalid tree structure: members must be an array" },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ error: "Unknown type" }, { status: 400 });
-  } catch (e) {
+
+    if (!tree.edges || !Array.isArray(tree.edges)) {
+      return NextResponse.json(
+        { error: "Invalid tree structure: edges must be an array" },
+        { status: 400 }
+      );
+    }
+
+    // Update timestamps
+    const updatedTree: FamilyTree = {
+      ...tree,
+      id: userId,
+      ownerId: userId,
+      updatedAt: new Date().toISOString(),
+      version: {
+        ...tree.version,
+        current: (tree.version?.current || 0) + 1,
+        history: [
+          ...(tree.version?.history || []),
+          {
+            id: `version_${Date.now()}`,
+            ts: new Date().toISOString(),
+            summary: `Updated tree with ${tree.members.length} members`,
+            snapshotRef: "", // TODO: Store snapshot in separate collection
+          },
+        ].slice(-10), // Keep only last 10 versions
+      },
+    };
+
+    await adminDb.collection("familyTrees").doc(userId).set(updatedTree);
+
+    return NextResponse.json({
+      success: true,
+      tree: updatedTree,
+      message: "Family tree saved successfully",
+    });
+  } catch (error) {
+    console.error("Error saving family tree:", error);
     return NextResponse.json(
-      { error: "Failed to update tree" },
+      { error: "Failed to save family tree" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/family-tree - Delete user's family tree
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "User ID is required" },
+        { status: 400 }
+      );
+    }
+
+    await adminDb.collection("familyTrees").doc(userId).delete();
+
+    return NextResponse.json({
+      success: true,
+      message: "Family tree deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting family tree:", error);
+    return NextResponse.json(
+      { error: "Failed to delete family tree" },
       { status: 500 }
     );
   }
