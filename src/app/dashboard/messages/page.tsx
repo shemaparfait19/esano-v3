@@ -24,6 +24,8 @@ type Message = {
   receiverId: string;
   text: string;
   createdAt: string;
+  isRead?: boolean;
+  delivered?: boolean;
 };
 
 function PeerName({ userId }: { userId: string }) {
@@ -60,6 +62,7 @@ export default function MessagesPage() {
   const [activePeer, setActivePeer] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
+  const [unreadByPeer, setUnreadByPeer] = useState<Record<string, number>>({});
 
   // Live chat list (latest per peer)
   useEffect(() => {
@@ -93,9 +96,29 @@ export default function MessagesPage() {
     // If deep-link peer param is present, select it
     const initialPeer = searchParams?.get("peer");
     if (initialPeer) setActivePeer(initialPeer);
+    // Unread by peer listener
+    const qUnread = query(
+      ref,
+      where("receiverId", "==", user.uid),
+      where("isRead", "==", false)
+    );
+    const unsubUnread = onSnapshot(
+      qUnread,
+      (snap) => {
+        const counts: Record<string, number> = {};
+        snap.docs.forEach((d) => {
+          const m = d.data() as any;
+          const peer = m.senderId as string;
+          counts[peer] = (counts[peer] || 0) + 1;
+        });
+        setUnreadByPeer(counts);
+      },
+      () => setUnreadByPeer({})
+    );
     return () => {
       unsubA();
       unsubB();
+      unsubUnread();
     };
   }, [user?.uid]);
 
@@ -172,6 +195,14 @@ export default function MessagesPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ receiverId: user.uid, senderId: activePeer }),
     }).catch(() => {});
+    // Optimistically update local state for read receipts
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.senderId === activePeer && m.receiverId === user.uid
+          ? { ...m, isRead: true }
+          : m
+      )
+    );
     return () => {
       unsub1();
       unsub2();
@@ -202,14 +233,20 @@ export default function MessagesPage() {
             <div className="text-sm text-muted-foreground">No chats yet</div>
           )}
           {list.map((c) => (
-            <Button
-              key={c.peerId}
-              variant={activePeer === c.peerId ? "default" : "outline"}
-              className="w-full justify-start"
-              onClick={() => setActivePeer(c.peerId)}
-            >
-              <PeerName userId={c.peerId} />
-            </Button>
+            <div key={c.peerId} className="flex items-center gap-2">
+              <Button
+                variant={activePeer === c.peerId ? "default" : "outline"}
+                className="w-full justify-start"
+                onClick={() => setActivePeer(c.peerId)}
+              >
+                <PeerName userId={c.peerId} />
+              </Button>
+              {unreadByPeer[c.peerId] ? (
+                <span className="inline-flex items-center justify-center text-xs bg-green-600 text-white rounded-full h-5 px-2">
+                  {unreadByPeer[c.peerId]}
+                </span>
+              ) : null}
+            </div>
           ))}
         </CardContent>
       </Card>
@@ -236,6 +273,11 @@ export default function MessagesPage() {
               >
                 <div className="inline-block bg-muted rounded px-2 py-1 text-sm max-w-[75%]">
                   {m.text}
+                  {m.senderId === user?.uid && (
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      {m.isRead ? "seen" : m.delivered ? "delivered" : "sent"}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -31,6 +31,7 @@ export async function POST(req: Request) {
       text: String(text).slice(0, 4000),
       createdAt: new Date().toISOString(),
       isRead: false,
+      delivered: true,
     };
     await adminDb.collection("messages").add(message);
 
