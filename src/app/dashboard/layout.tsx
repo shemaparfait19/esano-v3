@@ -29,7 +29,14 @@ import { useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Dashboard" },
-  { href: "/dashboard/search", icon: Search, label: "Find Family" },
+  {
+    href: "/dashboard/search",
+    icon: Search,
+    label: "Find Family",
+    isAnimated: true,
+    className:
+      "bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700",
+  },
   { href: "/dashboard/dna-analysis", icon: Dna, label: "DNA Analysis" },
   { href: "/dashboard/relatives", icon: Users, label: "Relatives" },
   { href: "/dashboard/profile", icon: Users, label: "Profile" },
@@ -94,9 +101,20 @@ export default function DashboardLayout({
                   <SidebarMenuButton
                     isActive={pathname === item.href}
                     tooltip={{ children: item.label }}
+                    className={
+                      item.isAnimated
+                        ? `${item.className} animate-pulse hover:animate-none transition-all duration-300 shadow-lg`
+                        : undefined
+                    }
                   >
-                    <item.icon />
-                    <span>{item.label}</span>
+                    <item.icon
+                      className={item.isAnimated ? "animate-bounce" : undefined}
+                    />
+                    <span
+                      className={item.isAnimated ? "font-semibold" : undefined}
+                    >
+                      {item.label}
+                    </span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>

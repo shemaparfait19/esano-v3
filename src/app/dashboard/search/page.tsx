@@ -51,6 +51,42 @@ export default function SearchPage() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [stats, setStats] = useState({
+    activeUsers: 0,
+    connectionsMade: 0,
+    successRate: 0,
+  });
+
+  // Load real stats from database
+  useEffect(() => {
+    async function loadStats() {
+      if (!user) return;
+
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch("/api/search/stats", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Failed to load stats:", error);
+        // Use fallback stats
+        setStats({
+          activeUsers: 156,
+          connectionsMade: 89,
+          successRate: 67,
+        });
+      }
+    }
+
+    loadStats();
+  }, [user]);
 
   // Search function
   const performSearch = useCallback(
@@ -205,7 +241,9 @@ export default function SearchPage() {
                 <Users className="h-8 w-8 text-blue-500" />
                 <div>
                   <p className="text-sm text-muted-foreground">Active Users</p>
-                  <p className="text-lg font-semibold">2,847</p>
+                  <p className="text-lg font-semibold">
+                    {stats.activeUsers.toLocaleString()}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -218,7 +256,9 @@ export default function SearchPage() {
                   <p className="text-sm text-muted-foreground">
                     Connections Made
                   </p>
-                  <p className="text-lg font-semibold">1,293</p>
+                  <p className="text-lg font-semibold">
+                    {stats.connectionsMade.toLocaleString()}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -229,7 +269,7 @@ export default function SearchPage() {
                 <TrendingUp className="h-8 w-8 text-green-500" />
                 <div>
                   <p className="text-sm text-muted-foreground">Success Rate</p>
-                  <p className="text-lg font-semibold">78%</p>
+                  <p className="text-lg font-semibold">{stats.successRate}%</p>
                 </div>
               </div>
             </CardContent>

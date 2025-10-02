@@ -34,7 +34,7 @@ export default function SearchInput({
 
   // Trigger search when debounced query changes
   useEffect(() => {
-    if (debouncedQuery.trim().length >= 2) {
+    if (debouncedQuery.trim().length >= 3) {
       onSearch(debouncedQuery.trim());
     } else if (debouncedQuery.trim().length === 0) {
       onClear();
@@ -96,9 +96,9 @@ export default function SearchInput({
       </div>
 
       {/* Search hints */}
-      {query.length > 0 && query.length < 2 && (
+      {query.length > 0 && query.length < 3 && (
         <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-muted/50 rounded-md text-sm text-muted-foreground">
-          Type at least 2 characters to search
+          Type at least 3 characters to search
         </div>
       )}
 

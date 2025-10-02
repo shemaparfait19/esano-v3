@@ -84,15 +84,20 @@ function calculateMatchScore(
   let score = 0;
   const reasons: string[] = [];
 
+  // Use actual database fields from UserProfile
   const candidateName = (
     candidate.fullName ||
     candidate.displayName ||
+    `${candidate.firstName || ""} ${candidate.lastName || ""}`.trim() ||
     ""
   ).toLowerCase();
+
   const candidateLocation = (
-    candidate.currentCity ||
     candidate.birthPlace ||
-    candidate.residence?.city ||
+    candidate.province ||
+    candidate.district ||
+    candidate.residenceProvince ||
+    candidate.residenceDistrict ||
     ""
   ).toLowerCase();
 
@@ -114,11 +119,29 @@ function calculateMatchScore(
     }
   }
 
-  // Location matching
+  // Location matching - check multiple location fields
   if (searchTerms.locations.length > 0) {
-    const locationMatch = searchTerms.locations.some(
-      (loc) =>
-        candidateLocation.includes(loc) || loc.includes(candidateLocation)
+    const locationFields = [
+      candidate.birthPlace,
+      candidate.province,
+      candidate.district,
+      candidate.sector,
+      candidate.cell,
+      candidate.village,
+      candidate.residenceProvince,
+      candidate.residenceDistrict,
+      candidate.residenceSector,
+      candidate.residenceCell,
+      candidate.residenceVillage,
+    ]
+      .filter(Boolean)
+      .map((field) => field.toLowerCase());
+
+    const locationMatch = searchTerms.locations.some((searchLoc) =>
+      locationFields.some(
+        (candidateLoc) =>
+          candidateLoc.includes(searchLoc) || searchLoc.includes(candidateLoc)
+      )
     );
 
     if (locationMatch) {
@@ -128,18 +151,57 @@ function calculateMatchScore(
   }
 
   // Profile completeness bonus
-  if (candidate.profilePicture || candidate.photoURL) {
+  if (candidate.profilePicture) {
     score += 10;
     reasons.push("Has profile picture");
   }
 
+  // Profile completion bonus
+  if (candidate.profileCompleted) {
+    score += 15;
+    reasons.push("Complete profile");
+  }
+
+  // Birth date matching bonus
+  if (candidate.birthDate && searchTerms.fullQuery.match(/\d{4}/)) {
+    const yearInQuery = searchTerms.fullQuery.match(/\d{4}/)?.[0];
+    if (yearInQuery && candidate.birthDate.includes(yearInQuery)) {
+      score += 40;
+      reasons.push("Birth year match");
+    }
+  }
+
+  // Clan/cultural info bonus
+  if (
+    candidate.clanOrCulturalInfo &&
+    searchTerms.nameWords.some((word) =>
+      candidate.clanOrCulturalInfo.toLowerCase().includes(word)
+    )
+  ) {
+    score += 25;
+    reasons.push("Cultural background match");
+  }
+
+  // Relatives names matching
+  if (candidate.relativesNames && Array.isArray(candidate.relativesNames)) {
+    const relativesMatch = searchTerms.nameWords.some((searchWord) =>
+      candidate.relativesNames.some((relativeName: string) =>
+        relativeName.toLowerCase().includes(searchWord)
+      )
+    );
+    if (relativesMatch) {
+      score += 30;
+      reasons.push("Related family member");
+    }
+  }
+
   // Recent activity bonus for users
-  if (type === "user" && candidate.lastLoginAt) {
-    const lastLogin = new Date(candidate.lastLoginAt);
-    const daysSinceLogin =
-      (Date.now() - lastLogin.getTime()) / (1000 * 60 * 60 * 24);
-    if (daysSinceLogin < 30) {
-      score += 15;
+  if (type === "user" && candidate.updatedAt) {
+    const lastUpdate = new Date(candidate.updatedAt);
+    const daysSinceUpdate =
+      (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceUpdate < 30) {
+      score += 10;
       reasons.push("Recently active");
     }
   }
@@ -205,13 +267,71 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // For very short queries, return early with suggestions
+    if (query.trim().length < 3) {
+      return NextResponse.json({
+        results: [],
+        totalCount: 0,
+        searchTime: Date.now() - startTime,
+        suggestions: [
+          "Please enter at least 3 characters",
+          "Try: 'Uwimana', 'Marie', 'Kigali'",
+        ],
+      });
+    }
+
     const searchTerms = parseSearchQuery(query);
     const results: SearchResult[] = [];
 
-    // Search in users collection
+    // Search in users collection with better filtering
     const usersRef = adminDb.collection("users");
-    // For now, get all users and filter in memory (will optimize with indexes later)
-    const userSnapshot = await usersRef.limit(100).get();
+    let userSnapshot;
+
+    // Try to filter by name if we have name words
+    if (searchTerms.nameWords.length > 0) {
+      const firstNameWord = searchTerms.nameWords[0];
+
+      // Try searching by fullName first
+      userSnapshot = await usersRef
+        .where("fullName", ">=", firstNameWord)
+        .where("fullName", "<=", firstNameWord + "\uf8ff")
+        .limit(30)
+        .get();
+
+      // If no results, try firstName
+      if (userSnapshot.empty) {
+        userSnapshot = await usersRef
+          .where("firstName", ">=", firstNameWord)
+          .where("firstName", "<=", firstNameWord + "\uf8ff")
+          .limit(30)
+          .get();
+      }
+
+      // If still no results, try lastName
+      if (userSnapshot.empty) {
+        userSnapshot = await usersRef
+          .where("lastName", ">=", firstNameWord)
+          .where("lastName", "<=", firstNameWord + "\uf8ff")
+          .limit(30)
+          .get();
+      }
+
+      // If still no results, try displayName
+      if (userSnapshot.empty) {
+        userSnapshot = await usersRef
+          .where("displayName", ">=", firstNameWord)
+          .where("displayName", "<=", firstNameWord + "\uf8ff")
+          .limit(30)
+          .get();
+      }
+
+      // If no results from any name field, get a broader sample
+      if (userSnapshot.empty) {
+        userSnapshot = await usersRef.limit(50).get();
+      }
+    } else {
+      userSnapshot = await usersRef.limit(50).get();
+    }
 
     // Process user results
     for (const doc of userSnapshot.docs) {
@@ -236,16 +356,22 @@ export async function GET(request: NextRequest) {
         results.push({
           id: doc.id,
           type: "user",
-          name: userData.fullName || userData.displayName || "Unknown User",
+          name:
+            userData.fullName ||
+            userData.displayName ||
+            `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
+            "Unknown User",
           matchScore: score,
           matchReasons: reasons,
           preview: {
             location:
-              userData.currentCity ||
               userData.birthPlace ||
-              userData.residence?.city,
+              userData.province ||
+              userData.district ||
+              userData.residenceProvince ||
+              userData.residenceDistrict,
             birthDate: userData.birthDate,
-            profilePicture: userData.profilePicture || userData.photoURL,
+            profilePicture: userData.profilePicture,
           },
           contactInfo: {
             canConnect: connectionStatus === "none",
@@ -255,13 +381,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Search in family tree members (from all users' trees)
+    // Search in family tree members (limit to avoid timeout)
     const familyTreesRef = adminDb.collection("familyTrees");
-    const treeSnapshot = await familyTreesRef.get();
+    const treeSnapshot = await familyTreesRef.limit(20).get(); // Limit trees to search
 
     for (const treeDoc of treeSnapshot.docs) {
       const treeData = treeDoc.data();
       const members = treeData.members || [];
+
+      // Only search if we have a reasonable number of members
+      if (members.length > 100) continue;
 
       for (const member of members) {
         // Skip if member is the current user
@@ -273,7 +402,8 @@ export async function GET(request: NextRequest) {
           "family_member"
         );
 
-        if (score >= 20) {
+        if (score >= 30) {
+          // Higher threshold for family members
           results.push({
             id: member.id,
             type: "family_member",
