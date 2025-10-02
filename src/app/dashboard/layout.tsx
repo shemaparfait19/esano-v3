@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Users,
   Loader2,
+  Search,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import {
@@ -28,6 +29,7 @@ import { useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Dashboard" },
+  { href: "/dashboard/search", icon: Search, label: "Find Family" },
   { href: "/dashboard/dna-analysis", icon: Dna, label: "DNA Analysis" },
   { href: "/dashboard/relatives", icon: Users, label: "Relatives" },
   { href: "/dashboard/profile", icon: Users, label: "Profile" },
