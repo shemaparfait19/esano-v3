@@ -283,55 +283,11 @@ export async function GET(request: NextRequest) {
     const searchTerms = parseSearchQuery(query);
     const results: SearchResult[] = [];
 
-    // Search in users collection with better filtering
+    // Search in users collection - simplified for better performance
     const usersRef = adminDb.collection("users");
-    let userSnapshot;
 
-    // Try to filter by name if we have name words
-    if (searchTerms.nameWords.length > 0) {
-      const firstNameWord = searchTerms.nameWords[0];
-
-      // Try searching by fullName first
-      userSnapshot = await usersRef
-        .where("fullName", ">=", firstNameWord)
-        .where("fullName", "<=", firstNameWord + "\uf8ff")
-        .limit(30)
-        .get();
-
-      // If no results, try firstName
-      if (userSnapshot.empty) {
-        userSnapshot = await usersRef
-          .where("firstName", ">=", firstNameWord)
-          .where("firstName", "<=", firstNameWord + "\uf8ff")
-          .limit(30)
-          .get();
-      }
-
-      // If still no results, try lastName
-      if (userSnapshot.empty) {
-        userSnapshot = await usersRef
-          .where("lastName", ">=", firstNameWord)
-          .where("lastName", "<=", firstNameWord + "\uf8ff")
-          .limit(30)
-          .get();
-      }
-
-      // If still no results, try displayName
-      if (userSnapshot.empty) {
-        userSnapshot = await usersRef
-          .where("displayName", ">=", firstNameWord)
-          .where("displayName", "<=", firstNameWord + "\uf8ff")
-          .limit(30)
-          .get();
-      }
-
-      // If no results from any name field, get a broader sample
-      if (userSnapshot.empty) {
-        userSnapshot = await usersRef.limit(50).get();
-      }
-    } else {
-      userSnapshot = await usersRef.limit(50).get();
-    }
+    // Get all users and filter in memory for now (faster than multiple queries)
+    const userSnapshot = await usersRef.limit(100).get();
 
     // Process user results
     for (const doc of userSnapshot.docs) {
@@ -347,7 +303,7 @@ export async function GET(request: NextRequest) {
       );
 
       // Only include results with meaningful scores
-      if (score >= 20) {
+      if (score >= 15) {
         const connectionStatus = await getConnectionStatus(
           currentUserId,
           doc.id
@@ -381,50 +337,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Search in family tree members (limit to avoid timeout)
-    const familyTreesRef = adminDb.collection("familyTrees");
-    const treeSnapshot = await familyTreesRef.limit(20).get(); // Limit trees to search
-
-    for (const treeDoc of treeSnapshot.docs) {
-      const treeData = treeDoc.data();
-      const members = treeData.members || [];
-
-      // Only search if we have a reasonable number of members
-      if (members.length > 100) continue;
-
-      for (const member of members) {
-        // Skip if member is the current user
-        if (member.id === currentUserId) continue;
-
-        const { score, reasons } = calculateMatchScore(
-          searchTerms,
-          member,
-          "family_member"
-        );
-
-        if (score >= 30) {
-          // Higher threshold for family members
-          results.push({
-            id: member.id,
-            type: "family_member",
-            name: member.fullName || "Unknown Family Member",
-            matchScore: score,
-            matchReasons: reasons,
-            preview: {
-              location: member.birthPlace,
-              birthDate: member.birthDate,
-              relationshipContext: `In ${
-                treeData.ownerName || "someone"
-              }'s family tree`,
-            },
-            contactInfo: {
-              canConnect: false, // Family tree members can't be directly contacted
-              connectionStatus: "none",
-            },
-          });
-        }
-      }
-    }
+    // Skip family tree search for now to improve performance
+    // TODO: Re-enable with better indexing
+    // const familyTreesRef = adminDb.collection("familyTrees");
+    // const treeSnapshot = await familyTreesRef.limit(10).get();
 
     // Sort by match score and apply pagination
     results.sort((a, b) => b.matchScore - a.matchScore);

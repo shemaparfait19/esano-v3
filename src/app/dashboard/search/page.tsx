@@ -57,6 +57,15 @@ export default function SearchPage() {
     successRate: 0,
   });
 
+  // Check for query parameter on page load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryParam = urlParams.get("q");
+    if (queryParam && user) {
+      performSearch(queryParam, false);
+    }
+  }, [user]);
+
   // Load real stats from database
   useEffect(() => {
     async function loadStats() {

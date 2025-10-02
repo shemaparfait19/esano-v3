@@ -10,13 +10,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAppContext } from "@/contexts/app-context";
-import { ArrowRight, Dna, Globe, Users, BarChart, Bot } from "lucide-react";
+import {
+  ArrowRight,
+  Dna,
+  Globe,
+  Users,
+  BarChart,
+  Bot,
+  Search,
+} from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/contexts/auth-context";
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { SuggestionCard } from "@/components/dashboard/suggestion-card";
+import { useRouter } from "next/navigation";
 
 type SuggestedMatch = {
   userId: string;
@@ -55,8 +64,24 @@ const features = [
 export default function DashboardPage() {
   const { analysisCompleted, relatives, ancestry } = useAppContext();
   const { userProfile, user } = useAuth();
+  const router = useRouter();
   const [suggestions, setSuggestions] = useState<SuggestedMatch[] | null>(null);
   const [incomingCount, setIncomingCount] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      router.push(
+        `/dashboard/search?q=${encodeURIComponent(searchQuery.trim())}`
+      );
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -164,6 +189,28 @@ export default function DashboardPage() {
         <p className="mt-2 text-lg text-muted-foreground">
           Your personal space to explore your genetic story.
         </p>
+      </div>
+
+      {/* Animated Search Bar */}
+      <div className="flex justify-center mb-8">
+        <div className="flex border-2 border-primary overflow-hidden max-w-md mx-auto rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 animate-pulse hover:animate-none">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Search for lost family members..."
+            className="w-full outline-none bg-white text-gray-600 text-sm px-4 py-3 focus:bg-gray-50 transition-colors"
+          />
+          <button
+            type="button"
+            onClick={handleSearch}
+            className="flex items-center justify-center bg-primary hover:bg-primary/90 px-5 text-sm text-white transition-colors duration-200 group"
+          >
+            <Search className="h-4 w-4 mr-1 group-hover:animate-bounce" />
+            Search
+          </button>
+        </div>
       </div>
 
       {!analysisCompleted ? (
