@@ -289,6 +289,9 @@ export async function GET(request: NextRequest) {
     // Get all users and filter in memory for now (faster than multiple queries)
     const userSnapshot = await usersRef.limit(100).get();
 
+    console.log(`Found ${userSnapshot.size} users in database`);
+    console.log(`Search terms:`, searchTerms);
+
     // Process user results
     for (const doc of userSnapshot.docs) {
       const userData = doc.data();
@@ -302,8 +305,14 @@ export async function GET(request: NextRequest) {
         "user"
       );
 
-      // Only include results with meaningful scores
-      if (score >= 15) {
+      console.log(
+        `User ${
+          userData.fullName || userData.displayName || doc.id
+        }: score=${score}, reasons=${reasons.join(", ")}`
+      );
+
+      // Include any results with some score (very low threshold for testing)
+      if (score >= 1) {
         const connectionStatus = await getConnectionStatus(
           currentUserId,
           doc.id
@@ -342,11 +351,50 @@ export async function GET(request: NextRequest) {
     // const familyTreesRef = adminDb.collection("familyTrees");
     // const treeSnapshot = await familyTreesRef.limit(10).get();
 
+    console.log(`Total results before filtering: ${results.length}`);
+
+    // If no results found, return some users anyway for testing
+    if (results.length === 0) {
+      console.log("No matches found, returning sample users");
+      for (const doc of userSnapshot.docs.slice(0, 5)) {
+        if (doc.id === currentUserId) continue;
+        const userData = doc.data();
+        const connectionStatus = await getConnectionStatus(
+          currentUserId,
+          doc.id
+        );
+
+        results.push({
+          id: doc.id,
+          type: "user",
+          name:
+            userData.fullName ||
+            userData.displayName ||
+            `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
+            "Unknown User",
+          matchScore: 10, // Low score to indicate it's not a great match
+          matchReasons: ["Sample result - no direct matches found"],
+          preview: {
+            location:
+              userData.birthPlace || userData.province || userData.district,
+            birthDate: userData.birthDate,
+            profilePicture: userData.profilePicture,
+          },
+          contactInfo: {
+            canConnect: connectionStatus === "none",
+            connectionStatus,
+          },
+        });
+      }
+    }
+
     // Sort by match score and apply pagination
     results.sort((a, b) => b.matchScore - a.matchScore);
     const paginatedResults = results.slice(offset, offset + limit);
 
     const searchTime = Date.now() - startTime;
+
+    console.log(`Returning ${paginatedResults.length} results`);
 
     const response: SearchResponse = {
       results: paginatedResults,

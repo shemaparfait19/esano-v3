@@ -59,11 +59,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Stats API error:", error);
 
-    // Return fallback stats if there's an error
+    // Return zero stats if there's an error - don't show fake data
     return NextResponse.json({
-      activeUsers: 156,
-      connectionsMade: 89,
-      successRate: 67,
+      activeUsers: 0,
+      connectionsMade: 0,
+      successRate: 0,
     });
   }
 }

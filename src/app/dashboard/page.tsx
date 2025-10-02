@@ -191,23 +191,23 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Animated Search Bar */}
+      {/* Search Bar */}
       <div className="flex justify-center mb-8">
-        <div className="flex border-2 border-primary overflow-hidden max-w-md mx-auto rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 animate-pulse hover:animate-none">
+        <div className="flex border-2 border-primary overflow-hidden max-w-md mx-auto rounded-lg">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Search for lost family members..."
-            className="w-full outline-none bg-white text-gray-600 text-sm px-4 py-3 focus:bg-gray-50 transition-colors"
+            className="w-full outline-none bg-white text-gray-600 text-sm px-4 py-3"
           />
           <button
             type="button"
             onClick={handleSearch}
-            className="flex items-center justify-center bg-primary hover:bg-primary/90 px-5 text-sm text-white transition-colors duration-200 group"
+            className="flex items-center justify-center bg-primary hover:bg-primary/90 px-5 text-sm text-white"
           >
-            <Search className="h-4 w-4 mr-1 group-hover:animate-bounce" />
+            <Search className="h-4 w-4 mr-1" />
             Search
           </button>
         </div>

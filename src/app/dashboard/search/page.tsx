@@ -85,11 +85,11 @@ export default function SearchPage() {
         }
       } catch (error) {
         console.error("Failed to load stats:", error);
-        // Use fallback stats
+        // Don't show fake stats
         setStats({
-          activeUsers: 156,
-          connectionsMade: 89,
-          successRate: 67,
+          activeUsers: 0,
+          connectionsMade: 0,
+          successRate: 0,
         });
       }
     }
