@@ -84,129 +84,134 @@ function calculateMatchScore(
   let score = 0;
   const reasons: string[] = [];
 
-  // Use actual database fields from UserProfile
-  const candidateName = (
-    candidate.fullName ||
-    candidate.displayName ||
-    `${candidate.firstName || ""} ${candidate.lastName || ""}`.trim() ||
-    ""
-  ).toLowerCase();
+  try {
+    // Use actual database fields from UserProfile
+    const candidateName = (
+      candidate.fullName ||
+      candidate.displayName ||
+      `${candidate.firstName || ""} ${candidate.lastName || ""}`.trim() ||
+      ""
+    ).toLowerCase();
 
-  const candidateLocation = (
-    candidate.birthPlace ||
-    candidate.province ||
-    candidate.district ||
-    candidate.residenceProvince ||
-    candidate.residenceDistrict ||
-    ""
-  ).toLowerCase();
+    const candidateLocation = (
+      candidate.birthPlace ||
+      candidate.province ||
+      candidate.district ||
+      candidate.residenceProvince ||
+      candidate.residenceDistrict ||
+      ""
+    ).toLowerCase();
 
-  // Name matching (highest weight)
-  if (searchTerms.nameWords.length > 0) {
-    const nameMatch = searchTerms.nameWords.some(
-      (word) =>
-        candidateName.includes(word) ||
-        (word.length > 2 &&
-          candidateName.includes(word.substring(0, word.length - 1)))
-    );
+    // Name matching (highest weight)
+    if (searchTerms.nameWords.length > 0) {
+      const nameMatch = searchTerms.nameWords.some(
+        (word) =>
+          candidateName.includes(word) ||
+          (word.length > 2 &&
+            candidateName.includes(word.substring(0, word.length - 1)))
+      );
 
-    if (candidateName === searchTerms.fullQuery) {
-      score += 100;
-      reasons.push("Exact name match");
-    } else if (nameMatch) {
-      score += 80;
-      reasons.push("Name match");
+      if (candidateName === searchTerms.fullQuery) {
+        score += 100;
+        reasons.push("Exact name match");
+      } else if (nameMatch) {
+        score += 80;
+        reasons.push("Name match");
+      }
     }
-  }
 
-  // Location matching - check multiple location fields
-  if (searchTerms.locations.length > 0) {
-    const locationFields = [
-      candidate.birthPlace,
-      candidate.province,
-      candidate.district,
-      candidate.sector,
-      candidate.cell,
-      candidate.village,
-      candidate.residenceProvince,
-      candidate.residenceDistrict,
-      candidate.residenceSector,
-      candidate.residenceCell,
-      candidate.residenceVillage,
-    ]
-      .filter(Boolean)
-      .map((field) => field.toLowerCase());
+    // Location matching - check multiple location fields
+    if (searchTerms.locations.length > 0) {
+      const locationFields = [
+        candidate.birthPlace,
+        candidate.province,
+        candidate.district,
+        candidate.sector,
+        candidate.cell,
+        candidate.village,
+        candidate.residenceProvince,
+        candidate.residenceDistrict,
+        candidate.residenceSector,
+        candidate.residenceCell,
+        candidate.residenceVillage,
+      ]
+        .filter(Boolean)
+        .map((field) => field.toLowerCase());
 
-    const locationMatch = searchTerms.locations.some((searchLoc) =>
-      locationFields.some(
-        (candidateLoc) =>
-          candidateLoc.includes(searchLoc) || searchLoc.includes(candidateLoc)
-      )
-    );
+      const locationMatch = searchTerms.locations.some((searchLoc) =>
+        locationFields.some(
+          (candidateLoc) =>
+            candidateLoc.includes(searchLoc) || searchLoc.includes(candidateLoc)
+        )
+      );
 
-    if (locationMatch) {
-      score += 60;
-      reasons.push("Location match");
+      if (locationMatch) {
+        score += 60;
+        reasons.push("Location match");
+      }
     }
-  }
 
-  // Profile completeness bonus
-  if (candidate.profilePicture) {
-    score += 10;
-    reasons.push("Has profile picture");
-  }
-
-  // Profile completion bonus
-  if (candidate.profileCompleted) {
-    score += 15;
-    reasons.push("Complete profile");
-  }
-
-  // Birth date matching bonus
-  if (candidate.birthDate && searchTerms.fullQuery.match(/\d{4}/)) {
-    const yearInQuery = searchTerms.fullQuery.match(/\d{4}/)?.[0];
-    if (yearInQuery && candidate.birthDate.includes(yearInQuery)) {
-      score += 40;
-      reasons.push("Birth year match");
-    }
-  }
-
-  // Clan/cultural info bonus
-  if (
-    candidate.clanOrCulturalInfo &&
-    searchTerms.nameWords.some((word) =>
-      candidate.clanOrCulturalInfo.toLowerCase().includes(word)
-    )
-  ) {
-    score += 25;
-    reasons.push("Cultural background match");
-  }
-
-  // Relatives names matching
-  if (candidate.relativesNames && Array.isArray(candidate.relativesNames)) {
-    const relativesMatch = searchTerms.nameWords.some((searchWord) =>
-      candidate.relativesNames.some((relativeName: string) =>
-        relativeName.toLowerCase().includes(searchWord)
-      )
-    );
-    if (relativesMatch) {
-      score += 30;
-      reasons.push("Related family member");
-    }
-  }
-
-  // Recent activity bonus for users
-  if (type === "user" && candidate.updatedAt) {
-    const lastUpdate = new Date(candidate.updatedAt);
-    const daysSinceUpdate =
-      (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
-    if (daysSinceUpdate < 30) {
+    // Profile completeness bonus
+    if (candidate.profilePicture) {
       score += 10;
-      reasons.push("Recently active");
+      reasons.push("Has profile picture");
     }
-  }
 
-  return { score, reasons };
+    // Profile completion bonus
+    if (candidate.profileCompleted) {
+      score += 15;
+      reasons.push("Complete profile");
+    }
+
+    // Birth date matching bonus
+    if (candidate.birthDate && searchTerms.fullQuery.match(/\d{4}/)) {
+      const yearInQuery = searchTerms.fullQuery.match(/\d{4}/)?.[0];
+      if (yearInQuery && candidate.birthDate.includes(yearInQuery)) {
+        score += 40;
+        reasons.push("Birth year match");
+      }
+    }
+
+    // Clan/cultural info bonus
+    if (
+      candidate.clanOrCulturalInfo &&
+      searchTerms.nameWords.some((word) =>
+        candidate.clanOrCulturalInfo.toLowerCase().includes(word)
+      )
+    ) {
+      score += 25;
+      reasons.push("Cultural background match");
+    }
+
+    // Relatives names matching
+    if (candidate.relativesNames && Array.isArray(candidate.relativesNames)) {
+      const relativesMatch = searchTerms.nameWords.some((searchWord) =>
+        candidate.relativesNames.some((relativeName: string) =>
+          relativeName.toLowerCase().includes(searchWord)
+        )
+      );
+      if (relativesMatch) {
+        score += 30;
+        reasons.push("Related family member");
+      }
+    }
+
+    // Recent activity bonus for users
+    if (type === "user" && candidate.updatedAt) {
+      const lastUpdate = new Date(candidate.updatedAt);
+      const daysSinceUpdate =
+        (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceUpdate < 30) {
+        score += 10;
+        reasons.push("Recently active");
+      }
+    }
+
+    return { score, reasons };
+  } catch (error) {
+    console.error("Error in calculateMatchScore:", error);
+    return { score: 0, reasons: ["Error calculating match"] };
+  }
 }
 
 // Get connection status between current user and target user
@@ -299,50 +304,56 @@ export async function GET(request: NextRequest) {
       // Skip current user
       if (doc.id === currentUserId) continue;
 
-      const { score, reasons } = calculateMatchScore(
-        searchTerms,
-        userData,
-        "user"
-      );
-
-      console.log(
-        `User ${
-          userData.fullName || userData.displayName || doc.id
-        }: score=${score}, reasons=${reasons.join(", ")}`
-      );
-
-      // Include any results with some score (very low threshold for testing)
-      if (score >= 1) {
-        const connectionStatus = await getConnectionStatus(
-          currentUserId,
-          doc.id
+      try {
+        const { score, reasons } = calculateMatchScore(
+          searchTerms,
+          userData,
+          "user"
         );
 
-        results.push({
-          id: doc.id,
-          type: "user",
-          name:
-            userData.fullName ||
-            userData.displayName ||
-            `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
-            "Unknown User",
-          matchScore: score,
-          matchReasons: reasons,
-          preview: {
-            location:
-              userData.birthPlace ||
-              userData.province ||
-              userData.district ||
-              userData.residenceProvince ||
-              userData.residenceDistrict,
-            birthDate: userData.birthDate,
-            profilePicture: userData.profilePicture,
-          },
-          contactInfo: {
-            canConnect: connectionStatus === "none",
-            connectionStatus,
-          },
-        });
+        console.log(
+          `User ${
+            userData.fullName || userData.displayName || doc.id
+          }: score=${score}, reasons=${reasons.join(", ")}`
+        );
+
+        // Include any results with some score (very low threshold for testing)
+        if (score >= 1) {
+          const connectionStatus = await getConnectionStatus(
+            currentUserId,
+            doc.id
+          );
+
+          results.push({
+            id: doc.id,
+            type: "user",
+            name:
+              userData.fullName ||
+              userData.displayName ||
+              `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
+              "Unknown User",
+            matchScore: score,
+            matchReasons: reasons,
+            preview: {
+              location:
+                userData.birthPlace ||
+                userData.province ||
+                userData.district ||
+                userData.residenceProvince ||
+                userData.residenceDistrict,
+              birthDate: userData.birthDate,
+              profilePicture: userData.profilePicture,
+            },
+            contactInfo: {
+              canConnect: connectionStatus === "none",
+              connectionStatus,
+            },
+          });
+        }
+      } catch (userError) {
+        console.error(`Error processing user ${doc.id}:`, userError);
+        // Continue with next user instead of failing entire search
+        continue;
       }
     }
 
@@ -411,11 +422,13 @@ export async function GET(request: NextRequest) {
     };
 
     return NextResponse.json(response);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Search error:", error);
+    console.error("Error stack:", error.stack);
     return NextResponse.json(
       {
         error: "Search failed",
+        details: error.message,
         results: [],
         totalCount: 0,
         searchTime: Date.now() - startTime,
