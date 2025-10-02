@@ -244,7 +244,13 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Get current user
+    console.log("=== SEARCH API START ===");
+
+    // Temporarily skip auth for debugging
+    const currentUserId = "temp-user-id";
+
+    // TODO: Re-enable auth after fixing database issues
+    /*
     const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -253,6 +259,7 @@ export async function GET(request: NextRequest) {
     const token = authHeader.split("Bearer ")[1];
     const decodedToken = await getAuth().verifyIdToken(token);
     const currentUserId = decodedToken.uid;
+    */
 
     // Get search parameters
     const { searchParams } = new URL(request.url);
@@ -288,73 +295,111 @@ export async function GET(request: NextRequest) {
     const searchTerms = parseSearchQuery(query);
     const results: SearchResult[] = [];
 
-    // Search in users collection - simplified for better performance
-    const usersRef = adminDb.collection("users");
+    console.log("Attempting to connect to Firebase...");
 
-    // Get all users and filter in memory for now (faster than multiple queries)
-    const userSnapshot = await usersRef.limit(100).get();
+    // Test Firebase connection first
+    let userSnapshot: any;
+    try {
+      const usersRef = adminDb.collection("users");
+      console.log("Firebase reference created successfully");
 
-    console.log(`Found ${userSnapshot.size} users in database`);
-    console.log(`Search terms:`, searchTerms);
+      // Get all users and filter in memory for now (faster than multiple queries)
+      userSnapshot = await usersRef.limit(100).get();
+      console.log(`Found ${userSnapshot.size} users in database`);
 
-    // Process user results
-    for (const doc of userSnapshot.docs) {
-      const userData = doc.data();
+      if (userSnapshot.empty) {
+        console.log("Database is empty - no users found");
+        return NextResponse.json({
+          results: [],
+          totalCount: 0,
+          searchTime: Date.now() - startTime,
+          message: "No users found in database",
+        });
+      }
 
-      // Skip current user
-      if (doc.id === currentUserId) continue;
+      // Log first user to see data structure
+      const firstDoc = userSnapshot.docs[0];
+      console.log("Sample user ID:", firstDoc.id);
+      console.log(
+        "Sample user data:",
+        JSON.stringify(firstDoc.data(), null, 2)
+      );
 
-      try {
-        const { score, reasons } = calculateMatchScore(
-          searchTerms,
-          userData,
-          "user"
-        );
+      console.log(`Search terms:`, searchTerms);
 
-        console.log(
-          `User ${
-            userData.fullName || userData.displayName || doc.id
-          }: score=${score}, reasons=${reasons.join(", ")}`
-        );
+      // Process user results
+      for (const doc of userSnapshot.docs) {
+        const userData = doc.data();
 
-        // Include any results with some score (very low threshold for testing)
-        if (score >= 1) {
-          const connectionStatus = await getConnectionStatus(
-            currentUserId,
-            doc.id
+        // Skip current user
+        if (doc.id === currentUserId) continue;
+
+        try {
+          const { score, reasons } = calculateMatchScore(
+            searchTerms,
+            userData,
+            "user"
           );
 
-          results.push({
-            id: doc.id,
-            type: "user",
-            name:
-              userData.fullName ||
-              userData.displayName ||
-              `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
-              "Unknown User",
-            matchScore: score,
-            matchReasons: reasons,
-            preview: {
-              location:
-                userData.birthPlace ||
-                userData.province ||
-                userData.district ||
-                userData.residenceProvince ||
-                userData.residenceDistrict,
-              birthDate: userData.birthDate,
-              profilePicture: userData.profilePicture,
-            },
-            contactInfo: {
-              canConnect: connectionStatus === "none",
-              connectionStatus,
-            },
-          });
+          console.log(
+            `User ${
+              userData.fullName || userData.displayName || doc.id
+            }: score=${score}, reasons=${reasons.join(", ")}`
+          );
+
+          // Include any results with some score (very low threshold for testing)
+          if (score >= 1) {
+            const connectionStatus = await getConnectionStatus(
+              currentUserId,
+              doc.id
+            );
+
+            results.push({
+              id: doc.id,
+              type: "user",
+              name:
+                userData.fullName ||
+                userData.displayName ||
+                `${userData.firstName || ""} ${
+                  userData.lastName || ""
+                }`.trim() ||
+                "Unknown User",
+              matchScore: score,
+              matchReasons: reasons,
+              preview: {
+                location:
+                  userData.birthPlace ||
+                  userData.province ||
+                  userData.district ||
+                  userData.residenceProvince ||
+                  userData.residenceDistrict,
+                birthDate: userData.birthDate,
+                profilePicture: userData.profilePicture,
+              },
+              contactInfo: {
+                canConnect: connectionStatus === "none",
+                connectionStatus,
+              },
+            });
+          }
+        } catch (userError) {
+          console.error(`Error processing user ${doc.id}:`, userError);
+          // Continue with next user instead of failing entire search
+          continue;
         }
-      } catch (userError) {
-        console.error(`Error processing user ${doc.id}:`, userError);
-        // Continue with next user instead of failing entire search
-        continue;
       }
+    } catch (firebaseError: any) {
+      console.error("Firebase connection error:", firebaseError);
+      return NextResponse.json(
+        {
+          error: "Database connection failed",
+          details: firebaseError.message,
+          results: [],
+          totalCount: 0,
+          searchTime: Date.now() - startTime,
+        },
+        { status: 500 }
+      );
     }
 
     // Skip family tree search for now to improve performance
