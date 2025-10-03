@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
     const searchTerms = parseSearchQuery(query);
 
     // Search users with optimized queries
-    const results = await searchUsers(searchTerms, limit);
+    const { results, debug } = await searchUsers(searchTerms, limit);
 
     console.log(`✅ Found ${results.length} results for "${query}"`);
 
@@ -88,6 +88,7 @@ export async function GET(request: NextRequest) {
       query,
       searchTerms,
       count: results.length,
+      debug,
     };
 
     // Cache positive and empty results briefly
@@ -164,10 +165,11 @@ function parseSearchQuery(query: string) {
 async function searchUsers(
   searchTerms: any,
   limit: number
-): Promise<SearchResult[]> {
+): Promise<{ results: SearchResult[]; debug: any }> {
   const results: SearchResult[] = [];
   const seenIds = new Set<string>();
   let remainingBudget = Math.max(1, limit); // cap queries based on need
+  const debug: any = { collectionTried: [], fieldsTried: [] };
 
   // Try different collection names (but limit to save quota)
   const possibleCollections = ["users", "profiles", "userProfiles"];
@@ -192,10 +194,11 @@ async function searchUsers(
 
   if (!userCollection) {
     console.log("⚠️ No user collection found");
-    return [];
+    return { results: [], debug };
   }
 
   const collectionRef = adminDb.collection(userCollection);
+  debug.collectionTried.push(userCollection);
 
   // Helper to run a prefix query on multiple possible fields
   async function runPrefixQuery(field: string, term: string) {
@@ -206,6 +209,7 @@ async function searchUsers(
         .where(field, "<=", term + "\uf8ff")
         .limit(Math.min(10, remainingBudget))
         .get();
+      debug.fieldsTried.push(field);
       snap.docs.forEach((doc) => {
         if (results.length < limit && !seenIds.has(doc.id)) {
           const user = processUserDoc(doc, searchTerms);
@@ -228,6 +232,10 @@ async function searchUsers(
     await runPrefixQuery("lastName", name);
     // fallback fields common in user schemas
     await runPrefixQuery("fullName", name);
+    // nested paths commonly used
+    await runPrefixQuery("profile.firstName", name);
+    await runPrefixQuery("profile.lastName", name);
+    await runPrefixQuery("profile.fullName", name);
     if (results.length >= limit) break;
   }
 
@@ -239,11 +247,30 @@ async function searchUsers(
       // broader location fields commonly used
       await runPrefixQuery("birthPlace", location);
       await runPrefixQuery("currentCity", location);
+      await runPrefixQuery("profile.location", location);
+      await runPrefixQuery("address.city", location);
     }
   }
 
   // Sort by match score and return top results
-  return results.sort((a, b) => b.matchScore - a.matchScore).slice(0, limit);
+  let finalResults = results
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, limit);
+
+  // Last-resort tiny sample scan if still empty (avoid full collection scans)
+  if (finalResults.length === 0 && searchTerms.names.length > 0) {
+    try {
+      const sampleSnap = await collectionRef.limit(10).get();
+      debug.sampleScan = sampleSnap.size;
+      sampleSnap.docs.forEach((doc) => {
+        if (finalResults.length >= limit) return;
+        const u = processUserDoc(doc, searchTerms);
+        if (u && u.matchScore > 0) finalResults.push(u);
+      });
+    } catch {}
+  }
+
+  return { results: finalResults, debug };
 }
 
 /**
