@@ -8,6 +8,7 @@
 
 import { ai } from "@/ai/genkit";
 import { googleAI } from "@genkit-ai/googleai";
+import { openAI } from "@genkit-ai/openai";
 import {
   AncestryEstimationInputSchema,
   AncestryEstimationOutputSchema,
@@ -37,9 +38,11 @@ const analyzeAncestryFlow = ai.defineFlow(
     outputSchema: AncestryEstimationOutputSchema,
   },
   async (input) => {
-    const { output } = await ancestryEstimationPrompt(input, {
-      model: googleAI.model("gemini-1.5-flash-8b"),
-    });
+    const useGemini = !!process.env.GEMINI_API_KEY;
+    const model = useGemini
+      ? googleAI.model("gemini-1.5-flash-8b")
+      : openAI.chat("openrouter/auto");
+    const { output } = await ancestryEstimationPrompt(input, { model });
     return output!;
   }
 );

@@ -8,6 +8,7 @@
 
 import { ai } from "@/ai/genkit";
 import { googleAI } from "@genkit-ai/googleai";
+import { openAI } from "@genkit-ai/openai";
 import {
   GenerationalInsightsInputSchema,
   GenerationalInsightsOutputSchema,
@@ -50,9 +51,11 @@ const generationalInsightsFlow = ai.defineFlow(
     outputSchema: GenerationalInsightsOutputSchema,
   },
   async (input) => {
-    const { output } = await prompt(input, {
-      model: googleAI.model("gemini-1.5-flash-8b"),
-    });
+    const useGemini = !!process.env.GEMINI_API_KEY;
+    const model = useGemini
+      ? googleAI.model("gemini-1.5-flash-8b")
+      : openAI.chat("openrouter/auto");
+    const { output } = await prompt(input, { model });
     return output!;
   }
 );

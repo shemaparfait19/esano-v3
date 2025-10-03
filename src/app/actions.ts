@@ -51,92 +51,141 @@ export async function analyzeDna(
   dnaData: string,
   fileName: string
 ) {
+  const result: {
+    relatives: Awaited<ReturnType<typeof analyzeDnaAndPredictRelatives>>;
+    ancestry: any;
+    insights: any;
+    error?: string;
+  } = { relatives: [], ancestry: null, insights: null };
+
   try {
     const safeDnaData = (dnaData || "").slice(0, 200_000);
 
-    // Gather real comparator DNA from other users
-    const usersSnapshot = await adminDb.collection("users").get();
-    const otherUsersDnaData: string[] = [];
+    // Gather comparator DNA from other users (quota-safe)
+    let otherUsersDnaData: string[] = [];
     const validUserIds = new Set<string>();
-    usersSnapshot.docs.forEach((d) => {
-      if (d.id === userId) return;
-      const data = d.data() as UserProfile;
-      if (
-        data?.dnaData &&
-        typeof data.dnaData === "string" &&
-        data.dnaData.length > 0
-      ) {
-        otherUsersDnaData.push(data.dnaData);
-        validUserIds.add(d.id);
-      }
-    });
+    try {
+      // Prefer indexed filter if available; fallback to capped scan
+      const byField = await adminDb
+        .collection("users")
+        .where("dnaData", ">", "")
+        .limit(50)
+        .get();
+      const snapshot =
+        byField.size > 0
+          ? byField
+          : await adminDb.collection("users").limit(50).get();
+      snapshot.docs.forEach((d) => {
+        if (d.id === userId) return;
+        const data = d.data() as UserProfile;
+        if (
+          data?.dnaData &&
+          typeof data.dnaData === "string" &&
+          data.dnaData.length > 0
+        ) {
+          otherUsersDnaData.push(data.dnaData);
+          validUserIds.add(d.id);
+        }
+      });
+    } catch {}
 
     const ancestryInput: AncestryEstimationInput = { snpData: safeDnaData };
     const insightsInput: GenerationalInsightsInput = {
       geneticMarkers: safeDnaData,
     };
 
-    // Always compute ancestry/insights for the user
-    const [ancestry, insights] = await Promise.all([
-      withRetry(() => analyzeAncestry(ancestryInput)),
-      withRetry(() => getGenerationalInsights(insightsInput)),
-    ]);
+    const hasGemini = !!process.env.GEMINI_API_KEY;
 
-    // Only compute relatives when there is at least one real comparator
-    let relatives: Awaited<ReturnType<typeof analyzeDnaAndPredictRelatives>> =
-      [];
-    if (otherUsersDnaData.length > 0) {
-      const dnaInput: AnalyzeDnaAndPredictRelativesInput = {
-        dnaData: safeDnaData,
-        otherUsersDnaData: otherUsersDnaData.slice(0, 50),
-        userFamilyTreeData: "None",
-      };
-      const raw = await withRetry(() =>
-        analyzeDnaAndPredictRelatives(dnaInput)
-      );
-
-      // Post-validate: keep only matches that reference a real user with stored dna
-      relatives = (raw || [])
-        .filter(
-          (r) =>
-            !!r && typeof r.userId === "string" && validUserIds.has(r.userId)
-        )
-        .filter(
-          (r) =>
-            r.relationshipProbability === undefined ||
-            r.relationshipProbability >= 0.3
-        )
-        .slice(0, 20);
-    } else {
-      relatives = [];
+    // Compute ancestry & insights with graceful fallback
+    try {
+      if (hasGemini) {
+        const [ancestry, insights] = await Promise.all([
+          withRetry(() => analyzeAncestry(ancestryInput)),
+          withRetry(() => getGenerationalInsights(insightsInput)),
+        ]);
+        result.ancestry = ancestry;
+        result.insights = insights;
+      } else {
+        result.ancestry = {
+          summary: "AI key missing. Basic processing only.",
+        } as any;
+        result.insights = {
+          summary: "AI disabled. No insights available.",
+        } as any;
+      }
+    } catch (e: any) {
+      result.ancestry =
+        result.ancestry || ({ summary: "Ancestry unavailable" } as any);
+      result.insights =
+        result.insights || ({ summary: "Insights unavailable" } as any);
+      result.error = e?.message || "AI analysis failed";
     }
 
-    const userProfile: Partial<UserProfile> = {
-      userId,
-      dnaData: safeDnaData,
-      dnaFileName: fileName,
-      analysis: {
-        relatives,
-        ancestry,
-        insights,
-        completedAt: new Date().toISOString(),
-      } as any,
-      updatedAt: new Date().toISOString(),
-    };
-    await adminDb
-      .collection("users")
-      .doc(userId)
-      .set(userProfile, { merge: true });
+    // Predict relatives only if we have comparators and AI available
+    try {
+      if (hasGemini && otherUsersDnaData.length > 0) {
+        const dnaInput: AnalyzeDnaAndPredictRelativesInput = {
+          dnaData: safeDnaData,
+          otherUsersDnaData: otherUsersDnaData.slice(0, 50),
+          userFamilyTreeData: "None",
+        };
+        const raw = await withRetry(() =>
+          analyzeDnaAndPredictRelatives(dnaInput)
+        );
+        result.relatives = (raw || [])
+          .filter(
+            (r) =>
+              !!r && typeof r.userId === "string" && validUserIds.has(r.userId)
+          )
+          .filter(
+            (r) =>
+              r.relationshipProbability === undefined ||
+              r.relationshipProbability >= 0.3
+          )
+          .slice(0, 20);
+      } else {
+        result.relatives = [];
+      }
+    } catch (e: any) {
+      result.relatives = [];
+      result.error = result.error || e?.message || "Relative prediction failed";
+    }
 
-    return { relatives, ancestry, insights };
+    // Persist minimal analysis and the uploaded dna text (merge)
+    try {
+      const userProfile: Partial<UserProfile> = {
+        userId,
+        dnaData: (dnaData || "").slice(0, 200_000),
+        dnaFileName: fileName,
+        analysis: {
+          relatives: result.relatives,
+          ancestry: result.ancestry,
+          insights: result.insights,
+          completedAt: new Date().toISOString(),
+        } as any,
+        updatedAt: new Date().toISOString(),
+      };
+      await adminDb
+        .collection("users")
+        .doc(userId)
+        .set(userProfile, { merge: true });
+    } catch (e: any) {
+      result.error = result.error || e?.message || "Failed to save analysis";
+    }
+
+    return result;
   } catch (error: any) {
     console.error(
       "AI Analysis or Firestore operation failed:",
       error?.message || error
     );
-    throw new Error(
-      error?.message || "Failed to analyze DNA data. Please try again later."
-    );
+    return {
+      relatives: [],
+      ancestry: { summary: "Analysis failed" },
+      insights: { summary: "Analysis failed" },
+      error:
+        error?.message || "Failed to analyze DNA data. Please try again later.",
+    };
   }
 }
 
