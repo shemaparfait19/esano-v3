@@ -304,15 +304,47 @@ async function searchUsers(
     }
   }
 
-  // Apply context-aware scoring boosts (instant, lightweight)
+  // Apply keyword relevance and context-aware scoring boosts (instant, lightweight)
   const userCurrentLoc = (context?.currentLocation || "").toLowerCase();
   const userKnownLocs = (context?.knownLocations || []).map((x) =>
     x.toLowerCase()
   );
 
-  const boosted = results.map((r) => {
+  // Detect if query is primarily a location search
+  const isMostlyLocationQuery =
+    searchTerms.names.length === 0 && searchTerms.locations.length > 0;
+
+  // Helper to score a field against query terms
+  function scoreField(value: string | undefined, terms: string[]): number {
+    if (!value) return 0;
+    const v = value.toLowerCase();
+    let s = 0;
+    for (const t of terms) {
+      if (!t) continue;
+      if (v === t) s += 20; // exact match
+      else if (v.startsWith(t)) s += 12; // prefix
+      else if (v.includes(t)) s += 6; // substring
+    }
+    return s;
+  }
+
+  // Optionally filter by location for pure location queries
+  const preFiltered = isMostlyLocationQuery
+    ? results.filter((r) => {
+        const loc = (r.location || "").toLowerCase();
+        return searchTerms.locations.some((t) => loc.includes(t));
+      })
+    : results;
+
+  const boosted = preFiltered.map((r) => {
     let boost = 0;
     const loc = (r.location || "").toLowerCase();
+    const displayName = (r.name || "").toLowerCase();
+
+    // Keyword relevance boosts (names and locations)
+    boost += scoreField(displayName, searchTerms.names);
+    boost += scoreField(loc, searchTerms.locations);
+
     if (userCurrentLoc && loc && loc.includes(userCurrentLoc)) boost += 5;
     if (
       userKnownLocs.length &&
