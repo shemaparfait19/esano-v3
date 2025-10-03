@@ -106,14 +106,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(payload);
   } catch (error) {
     console.error("❌ Optimized search failed:", error);
-    return NextResponse.json(
-      {
-        success: false,
+    // Soft-fail to avoid UI breaking; return empty results rather than 500
+    return NextResponse.json({
+      success: true,
+      results: [],
+      query: undefined,
+      searchTerms: undefined,
+      count: 0,
+      debug: {
         error: error instanceof Error ? error.message : "Search failed",
-        results: [],
       },
-      { status: 500 }
-    );
+    });
   }
 }
 
@@ -308,13 +311,26 @@ async function searchUsers(
 function processUserDoc(doc: any, searchTerms: any): SearchResult | null {
   try {
     const data = doc.data();
+    const displayName =
+      (typeof data.name === "string" && data.name) ||
+      (typeof data.fullName === "string" && data.fullName) ||
+      `${(data.firstName || data.profile?.firstName || "")
+        .toString()
+        .trim()} ${(data.lastName || data.profile?.lastName || "")
+        .toString()
+        .trim()}`.trim();
+
     const user: SearchResult = {
       id: doc.id,
-      name:
-        data.name || `${data.firstName || ""} ${data.lastName || ""}`.trim(),
-      firstName: data.firstName,
-      lastName: data.lastName,
-      location: data.location,
+      name: displayName || doc.id,
+      firstName: data.firstName || data.profile?.firstName,
+      lastName: data.lastName || data.profile?.lastName,
+      location:
+        data.location ||
+        data.profile?.location ||
+        data.currentCity ||
+        data.address?.city ||
+        data.birthPlace,
       birthDate: data.birthDate,
       profilePicture: data.profilePicture,
       bio: data.bio,
