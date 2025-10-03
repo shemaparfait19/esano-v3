@@ -7,6 +7,62 @@ const SEARCH_CACHE = new Map<string, CacheValue>();
 const CACHE_MAX_ENTRIES = 100;
 const DEFAULT_TTL_MS = 60 * 1000; // 60s short TTL for fresh results
 
+// Lightweight public profiles cache for substring filtering without extra reads
+type PublicProfile = {
+  id: string;
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  location?: string;
+};
+const PUBLIC_CACHE: { profiles: PublicProfile[]; loadedAt: number } = {
+  profiles: [],
+  loadedAt: 0,
+};
+const PUBLIC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function warmPublicProfilesCache(): Promise<void> {
+  if (Date.now() - PUBLIC_CACHE.loadedAt < PUBLIC_CACHE_TTL_MS) return;
+  try {
+    const collections = ["users", "profiles", "userProfiles"];
+    const aggregated: PublicProfile[] = [];
+    for (const coll of collections) {
+      try {
+        // Prefer completed profiles if field exists, otherwise take a capped sample
+        let snap = await adminDb
+          .collection(coll)
+          .where("profileCompleted", "==", true)
+          .limit(400)
+          .get();
+        if (snap.empty) {
+          snap = await adminDb.collection(coll).limit(400).get();
+        }
+        snap.docs.forEach((d) => {
+          const data: any = d.data();
+          aggregated.push({
+            id: d.id,
+            name:
+              data.name ||
+              data.fullName ||
+              `${data.firstName || ""} ${data.lastName || ""}`.trim(),
+            firstName: data.firstName || data.profile?.firstName,
+            lastName: data.lastName || data.profile?.lastName,
+            location:
+              data.location ||
+              data.profile?.location ||
+              data.currentCity ||
+              data.address?.city ||
+              data.birthPlace,
+          });
+        });
+      } catch {}
+      if (aggregated.length >= 900) break; // cap total
+    }
+    PUBLIC_CACHE.profiles = aggregated;
+    PUBLIC_CACHE.loadedAt = Date.now();
+  } catch {}
+}
+
 function getCache(key: string) {
   const entry = SEARCH_CACHE.get(key);
   if (!entry) return null;
@@ -88,6 +144,8 @@ export async function GET(request: NextRequest) {
     const searchTerms = parseSearchQuery(query);
 
     // Search users with optimized queries
+    await warmPublicProfilesCache();
+
     const { results, debug } = await searchUsers(searchTerms, limit, {
       currentLocation,
       knownLocations,
@@ -96,12 +154,15 @@ export async function GET(request: NextRequest) {
 
     console.log(`✅ Found ${results.length} results for "${query}"`);
 
+    // If substring filtering finds better public matches, merge and re-rank
+    const merged = mergeWithPublicCache(results, searchTerms, limit);
+
     const payload = {
       success: true,
-      results,
+      results: merged,
       query,
       searchTerms,
-      count: results.length,
+      count: merged.length,
       debug,
     };
 
@@ -376,6 +437,56 @@ async function searchUsers(
   }
 
   return { results: finalResults, debug };
+}
+
+/**
+ * Merge Firestore results with public cache substring matches and re-rank
+ */
+function mergeWithPublicCache(results: any[], searchTerms: any, limit: number) {
+  try {
+    const terms = [...searchTerms.names, ...searchTerms.locations]
+      .map((t: string) => t.toLowerCase())
+      .filter(Boolean);
+
+    // Score cached profiles by substring presence across fields
+    const cacheMatches = PUBLIC_CACHE.profiles
+      .map((p) => {
+        const name = (p.name || "").toLowerCase();
+        const loc = (p.location || "").toLowerCase();
+        let score = 0;
+        for (const t of terms) {
+          if (name.includes(t)) score += 8;
+          if (loc.includes(t)) score += 10; // location heavier for place queries
+        }
+        return score > 0
+          ? {
+              id: p.id,
+              type: "user" as const,
+              name: p.name,
+              matchScore: score,
+              matchReasons: [],
+              preview: { location: p.location },
+              contactInfo: {
+                canConnect: true,
+                connectionStatus: "none" as const,
+              },
+            }
+          : null;
+      })
+      .filter(Boolean) as any[];
+
+    const byId = new Map<string, any>();
+    [...results, ...cacheMatches].forEach((r) => {
+      const prev = byId.get(r.id);
+      if (!prev || r.matchScore > prev.matchScore) byId.set(r.id, r);
+    });
+
+    return Array.from(byId.values())
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, limit);
+  } catch {
+    return results.slice(0, limit);
+  }
 }
 
 /**
