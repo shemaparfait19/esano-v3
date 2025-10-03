@@ -267,13 +267,15 @@ export async function POST(req: Request) {
       } catch {}
     }
 
-    // If OpenRouter key is configured, use OpenRouter first
+    // If OpenRouter key is configured, use OpenRouter first with timeout
     if (process.env.OPENROUTER_API_KEY) {
       const systemPrompt =
         "You are a helpful AI assistant specialized in genealogy and DNA analysis. When available, use the provided user context to personalize guidance, but never reveal raw data.";
       const composedUser = userContext
         ? `User Context (JSON): ${userContext}\n\nQuestion: ${query}`
         : query;
+      const orController = new AbortController();
+      const orTimer = setTimeout(() => orController.abort(), 12000);
       const orResp = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
         {
@@ -290,10 +292,15 @@ export async function POST(req: Request) {
               { role: "user", content: composedUser },
             ],
           }),
+          signal: orController.signal,
         }
       );
+      clearTimeout(orTimer);
       if (!orResp.ok) {
-        const detailText = await orResp.text();
+        let detailText = "";
+        try {
+          detailText = await orResp.text();
+        } catch {}
         // Fallback to DeepSeek if configured, then Gemini
         if (process.env.DEEPSEEK_API_KEY) {
           // fall through to DeepSeek block below
@@ -309,7 +316,15 @@ export async function POST(req: Request) {
           );
         }
       } else {
-        const orJson: any = await orResp.json();
+        let orJson: any = null;
+        try {
+          orJson = await orResp.json();
+        } catch {
+          return NextResponse.json({
+            response:
+              "Assistant responded, but the format was unexpected. Please retry.",
+          });
+        }
         const content = orJson?.choices?.[0]?.message?.content ?? "";
         return NextResponse.json({ response: content || "" });
       }
