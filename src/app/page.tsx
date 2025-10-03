@@ -1,40 +1,46 @@
-import Image from 'next/image';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dna, Bot, Users, Globe, BarChart, Sparkles } from 'lucide-react';
-import { Logo } from '@/components/logo';
+import Image from "next/image";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dna, Bot, Users, Globe, BarChart, Sparkles } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 const features = [
   {
     icon: <Dna className="h-8 w-8 text-primary" />,
-    title: 'AI-Powered DNA Analysis',
-    description: 'Upload your DNA data and let our AI uncover your roots, connect you with relatives, and reveal generational insights.',
+    title: "AI-Powered DNA Analysis",
+    description:
+      "Upload your DNA data and let our AI uncover your roots, connect you with relatives, and reveal generational insights.",
   },
   {
     icon: <Users className="h-8 w-8 text-primary" />,
-    title: 'Find & Connect Relatives',
-    description: 'Discover potential relatives through our advanced matching algorithm and build your family network.',
+    title: "Find & Connect Relatives",
+    description:
+      "Discover potential relatives through our advanced matching algorithm and build your family network.",
   },
   {
     icon: <Globe className="h-8 w-8 text-primary" />,
-    title: 'Detailed Ancestry Reports',
-    description: 'Explore your ethnic origins with interactive maps and detailed percentage breakdowns.',
+    title: "Detailed Ancestry Reports",
+    description:
+      "Explore your ethnic origins with interactive maps and detailed percentage breakdowns.",
   },
   {
     icon: <Sparkles className="h-8 w-8 text-primary" />,
-    title: 'Generational Insights',
-    description: 'Learn about traits and heritage passed down through your family line, all derived from your genetic data.',
+    title: "Generational Insights",
+    description:
+      "Learn about traits and heritage passed down through your family line, all derived from your genetic data.",
   },
   {
     icon: <Bot className="h-8 w-8 text-primary" />,
-    title: 'Genealogy Assistant',
-    description: 'Our AI chatbot is ready to answer your questions about genealogy, DNA, and your family history.',
+    title: "Genealogy Assistant",
+    description:
+      "Our AI chatbot is ready to answer your questions about genealogy, DNA, and your family history.",
   },
   {
     icon: <BarChart className="h-8 w-8 text-primary" />,
-    title: 'Interactive Visualizations',
-    description: 'Engage with your data through beautiful charts and visualizations that bring your story to life.',
+    title: "Interactive Visualizations",
+    description:
+      "Engage with your data through beautiful charts and visualizations that bring your story to life.",
   },
 ];
 
@@ -61,13 +67,24 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        <section className="py-20 md:py-32">
-          <div className="container text-center">
+        {/* Hero with background image */}
+        <section className="relative py-24 md:py-40">
+          <Image
+            src="/assets/hero.png"
+            alt="Hero background"
+            fill
+            priority
+            className="object-cover -z-10"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/70 to-background" />
+          <div className="container text-center relative">
             <h1 className="font-headline text-4xl font-bold tracking-tight text-primary md:text-6xl lg:text-7xl">
               Discover Your Story
             </h1>
             <p className="mt-4 text-lg text-foreground/80 md:text-xl max-w-2xl mx-auto">
-              Esano is your personal genealogy explorer. Uncover your ancestry, connect with family, and understand your heritage through the power of AI.
+              Esano is your personal genealogy explorer. Uncover your ancestry,
+              connect with family, and understand your heritage through the
+              power of AI.
             </p>
             <div className="mt-8 flex justify-center gap-4">
               <Button size="lg" asChild>
@@ -99,18 +116,27 @@ export default function Home() {
         <section className="py-20 md:py-32">
           <div className="container">
             <div className="text-center max-w-3xl mx-auto">
-              <h2 className="font-headline text-3xl font-bold text-primary md:text-4xl">A New Era of Genealogy</h2>
+              <h2 className="font-headline text-3xl font-bold text-primary md:text-4xl">
+                A New Era of Genealogy
+              </h2>
               <p className="mt-4 text-lg text-foreground/80">
-                Our platform combines cutting-edge AI with a user-friendly design to provide you with an unparalleled experience in exploring your family history.
+                Our platform combines cutting-edge AI with a user-friendly
+                design to provide you with an unparalleled experience in
+                exploring your family history.
               </p>
             </div>
 
             <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
               {features.map((feature) => (
-                <Card key={feature.title} className="bg-card/80 hover:shadow-lg transition-shadow">
+                <Card
+                  key={feature.title}
+                  className="bg-card/80 hover:shadow-lg transition-shadow"
+                >
                   <CardHeader className="flex flex-row items-center gap-4">
                     {feature.icon}
-                    <CardTitle className="font-headline text-xl text-primary">{feature.title}</CardTitle>
+                    <CardTitle className="font-headline text-xl text-primary">
+                      {feature.title}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-foreground/70">{feature.description}</p>
@@ -123,12 +149,20 @@ export default function Home() {
 
         <section className="bg-primary text-primary-foreground py-20 md:py-24">
           <div className="container text-center">
-            <h2 className="font-headline text-3xl font-bold md:text-4xl">Ready to Start Your Journey?</h2>
+            <h2 className="font-headline text-3xl font-bold md:text-4xl">
+              Ready to Start Your Journey?
+            </h2>
             <p className="mt-4 text-lg opacity-90 max-w-2xl mx-auto">
-              Your story is waiting to be told. Upload your DNA data today and let Esano guide you through your past.
+              Your story is waiting to be told. Upload your DNA data today and
+              let Esano guide you through your past.
             </p>
             <div className="mt-8">
-              <Button size="lg" variant="secondary" className="bg-accent text-accent-foreground hover:bg-accent/90" asChild>
+              <Button
+                size="lg"
+                variant="secondary"
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                asChild
+              >
                 <Link href="/signup">Upload Your DNA</Link>
               </Button>
             </div>
