@@ -9,7 +9,6 @@
 
 import { ai } from "@/ai/genkit";
 import { googleAI } from "@genkit-ai/googleai";
-import { openAI } from "@genkit-ai/openai";
 import {
   AnalyzeDnaAndPredictRelativesInputSchema,
   AnalyzeDnaAndPredictRelativesOutputSchema,
@@ -51,12 +50,8 @@ const analyzeDnaAndPredictRelativesFlow = ai.defineFlow(
     outputSchema: AnalyzeDnaAndPredictRelativesOutputSchema,
   },
   async (input) => {
-    const useGemini = !!process.env.GEMINI_API_KEY;
-    const model = useGemini
-      ? googleAI.model("gemini-1.5-flash-8b")
-      : openAI.chat("openrouter/auto");
     const { output } = await analyzeDnaAndPredictRelativesPrompt(input, {
-      model,
+      model: googleAI.model("gemini-1.5-flash-8b"),
     });
     return output!;
   }
