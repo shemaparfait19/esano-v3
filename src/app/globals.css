@@ -23,7 +23,7 @@
     --border: 120 10% 85%;
     --input: 120 10% 89%;
     --ring: 120 39% 42%;
-    --radius: 0.5rem;
+    --radius: 0;
     --chart-1: 120 39% 37%;
     --chart-2: 45 65% 52%;
     --chart-3: 120 20% 60%;
@@ -65,5 +65,28 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Enforce square corners globally */
+  button,
+  .btn,
+  .rounded,
+  .rounded-sm,
+  .rounded-md,
+  .rounded-lg,
+  .rounded-xl,
+  .rounded-2xl,
+  .rounded-3xl,
+  .rounded-full,
+  .card,
+  .input,
+  .select,
+  .textarea,
+  .dialog,
+  .sheet,
+  .dropdown-menu,
+  .avatar,
+  .badge,
+  .chip {
+    border-radius: 0 !important;
   }
 }

@@ -79,10 +79,7 @@ export default function DashboardLayout({
       <Sidebar>
         <SidebarHeader>
           <div className="flex items-center gap-2">
-            <Logo className="size-8" />
-            <span className="font-headline text-lg font-bold text-primary group-data-[collapsible=icon]:hidden">
-              Esano
-            </span>
+            <Logo className="h-10 w-28" />
           </div>
         </SidebarHeader>
         <SidebarContent>

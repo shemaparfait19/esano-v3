@@ -92,10 +92,14 @@ export default function Home() {
               power of AI.
             </p>
             <div className="mt-8 flex justify-center gap-4">
-              <Button size="lg" asChild>
+              <Button size="lg" className="shadow-md shadow-black/10" asChild>
                 <Link href="/signup">Explore Your DNA</Link>
               </Button>
-              <Button size="lg" variant="outline">
+              <Button
+                size="lg"
+                variant="outline"
+                className="shadow-md shadow-black/10"
+              >
                 Learn More
               </Button>
             </div>
@@ -111,9 +115,20 @@ export default function Home() {
                 data-ai-hint="family tree"
                 width={1200}
                 height={500}
-                className="rounded-xl object-cover w-full h-auto aspect-[12/5] shadow-2xl shadow-primary/10"
+                className="object-cover w-full h-auto aspect-[12/5] shadow-2xl shadow-primary/10"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+              <div className="absolute inset-0 flex items-end p-6 md:p-10">
+                <div className="max-w-2xl">
+                  <h3 className="font-headline text-2xl md:text-3xl font-bold text-primary">
+                    Build and Explore Your Family Tree
+                  </h3>
+                  <p className="mt-2 text-foreground/80">
+                    Visualize generations, add relatives, and trace connections
+                    across Rwanda and beyond.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -148,6 +163,48 @@ export default function Home() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Video section with YouTube thumbnail */}
+        <section className="py-16 md:py-24">
+          <div className="container">
+            <div className="text-center max-w-3xl mx-auto">
+              <h2 className="font-headline text-3xl font-bold text-primary md:text-4xl">
+                How to use the system
+              </h2>
+              <p className="mt-3 text-foreground/80">
+                Watch a quick walkthrough to get started with Esano.
+              </p>
+            </div>
+            <div className="mt-8 mx-auto max-w-4xl">
+              <Link
+                href="https://www.youtube.com/watch?v=fkGCLIQx1MI&pp=ygURaG93IHRvIHVzZSBzeXN0ZW0%3D"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group block relative"
+              >
+                <Image
+                  src="https://img.youtube.com/vi/fkGCLIQx1MI/maxresdefault.jpg"
+                  alt="How to use the system - video thumbnail"
+                  width={1280}
+                  height={720}
+                  className="w-full h-auto object-cover"
+                />
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="h-16 w-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="h-8 w-8 text-red-600"
+                    >
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
+                </div>
+              </Link>
             </div>
           </div>
         </section>
