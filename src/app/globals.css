@@ -66,16 +66,9 @@
   body {
     @apply bg-background text-foreground;
   }
-  /* Enforce square corners globally (but keep intentionally circular elements) */
+  /* Enforce square corners on core controls, allow Tailwind rounded-* elsewhere */
   button,
   .btn,
-  .rounded,
-  .rounded-sm,
-  .rounded-md,
-  .rounded-lg,
-  .rounded-xl,
-  .rounded-2xl,
-  .rounded-3xl,
   .card,
   .input,
   .select,
