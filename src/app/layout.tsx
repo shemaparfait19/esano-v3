@@ -34,6 +34,8 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=PT+Sans:wght@400;700&display=swap"
           rel="stylesheet"
         />
+        <link rel="icon" href="/assets/favicon.png" sizes="any" />
+        <link rel="apple-touch-icon" href="/assets/favicon.png" />
       </head>
       <body className="font-body antialiased">
         <AuthProvider>

@@ -50,12 +50,17 @@ export default function Home() {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center">
           <div className="mr-4 flex">
-            <Link href="/" className="mr-6 flex items-center space-x-2">
-              <Logo className="h-8 w-8" />
-              <span className="font-bold font-headline">Esano</span>
+            <Link href="/" className="mr-6 flex items-center">
+              <Logo className="h-10 w-28" />
             </Link>
           </div>
           <div className="flex flex-1 items-center justify-end space-x-2">
+            <nav className="hidden md:flex items-center gap-6 mr-4 text-sm text-muted-foreground">
+              <Link href="/dashboard/relatives">Relatives</Link>
+              <Link href="/dashboard/family-tree">Family Tree</Link>
+              <Link href="/dashboard/dna-analysis">DNA Analysis</Link>
+              <Link href="/dashboard/insights">Insights</Link>
+            </nav>
             <Button variant="ghost" asChild>
               <Link href="/login">Log In</Link>
             </Button>
@@ -101,7 +106,7 @@ export default function Home() {
           <div className="container">
             <div className="relative">
               <Image
-                src="https://picsum.photos/1200/500"
+                src="/assets/afterhero.png"
                 alt="Family tree visualization"
                 data-ai-hint="family tree"
                 width={1200}
