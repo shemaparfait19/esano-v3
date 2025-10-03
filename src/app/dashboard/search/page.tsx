@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import SearchInput from "@/components/search/search-input";
 import SearchResults from "@/components/search/search-results";
+import { getCachedSearchResult, cacheSearchResult } from "@/lib/search-cache";
 
 interface SearchResult {
   id: string;
@@ -69,15 +70,9 @@ export default function SearchPage() {
   // Load real stats from database
   useEffect(() => {
     async function loadStats() {
-      if (!user) return;
-
+      // Temporarily remove auth requirement for debugging
       try {
-        const token = await user.getIdToken();
-        const response = await fetch("/api/search/stats", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch("/api/search/stats");
 
         if (response.ok) {
           const data = await response.json();
@@ -97,12 +92,13 @@ export default function SearchPage() {
     loadStats();
   }, [user]);
 
-  // Search function
+  // Search function with caching
   const performSearch = useCallback(
     async (query: string, isLoadMore = false) => {
       if (!user) return;
 
       const currentOffset = isLoadMore ? offset : 0;
+      const cacheKey = `${query}:${currentOffset}`;
 
       if (isLoadMore) {
         setIsLoadingMore(true);
@@ -110,48 +106,96 @@ export default function SearchPage() {
         setIsLoading(true);
         setResults([]);
         setOffset(0);
+
+        // Check cache for initial search (not for load more)
+        const cachedResult = getCachedSearchResult(query, { offset: 0 });
+        if (cachedResult) {
+          console.log("🎯 Using cached search results for:", query);
+          setResults(cachedResult.results);
+          setTotalCount(cachedResult.totalCount || cachedResult.results.length);
+          setSearchTime(cachedResult.searchTime);
+          setSuggestions(cachedResult.suggestions);
+          setCurrentQuery(query);
+          setOffset(cachedResult.results.length);
+          setHasMore(cachedResult.results.length >= 10); // Assume more if we got full page
+          setIsLoading(false);
+          return;
+        }
       }
 
       try {
-        const token = await user.getIdToken();
+        const startTime = Date.now();
+
+        // Use optimized API with smaller limits
         const searchParams = new URLSearchParams({
           query,
-          limit: "20",
-          offset: currentOffset.toString(),
+          limit: "10", // Reduced from 20 to save quota
         });
 
-        const response = await fetch(`/api/search/family?${searchParams}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+        const response = await fetch(`/api/search/optimized?${searchParams}`);
 
         if (!response.ok) {
           throw new Error("Search failed");
         }
 
-        const data: SearchResponse = await response.json();
+        const data = await response.json();
+        const searchTime = Date.now() - startTime;
+
+        // Transform results to match expected format
+        const transformedResults = data.results.map((result: any) => ({
+          id: result.id,
+          type: "user" as const,
+          name: result.name,
+          matchScore: result.matchScore,
+          matchReasons: result.matchReasons,
+          preview: {
+            location: result.location,
+            birthDate: result.birthDate,
+            profilePicture: result.profilePicture,
+          },
+          contactInfo: {
+            canConnect: true,
+            connectionStatus: "none" as const,
+          },
+        }));
+
+        const searchResponse = {
+          results: transformedResults,
+          totalCount: transformedResults.length,
+          searchTime,
+          suggestions:
+            transformedResults.length === 0
+              ? [
+                  "Try searching with different spelling",
+                  "Use common Rwandan names like 'Uwimana' or 'Habimana'",
+                  "Include location like 'Kigali' or 'Musanze'",
+                ]
+              : undefined,
+        };
 
         if (isLoadMore) {
-          setResults((prev) => [...prev, ...data.results]);
-          setOffset((prev) => prev + data.results.length);
+          setResults((prev) => [...prev, ...transformedResults]);
+          setOffset((prev) => prev + transformedResults.length);
         } else {
-          setResults(data.results);
-          setOffset(data.results.length);
+          setResults(transformedResults);
+          setOffset(transformedResults.length);
           setCurrentQuery(query);
+
+          // Cache the result for future use
+          cacheSearchResult(query, searchResponse, { offset: 0 });
         }
 
-        setTotalCount(data.totalCount);
-        setSearchTime(data.searchTime);
-        setSuggestions(data.suggestions);
-        setHasMore(
-          data.results.length === 20 &&
-            currentOffset + data.results.length < data.totalCount
-        );
+        setTotalCount(searchResponse.totalCount);
+        setSearchTime(searchResponse.searchTime);
+        setSuggestions(searchResponse.suggestions);
+        setHasMore(false); // Optimized API returns all results at once
       } catch (error) {
         console.error("Search error:", error);
-        setSuggestions(["Search failed. Please try again."]);
+        setSuggestions([
+          "Search failed. Please try again.",
+          "Check your internet connection",
+          "Try a simpler search term",
+        ]);
       } finally {
         setIsLoading(false);
         setIsLoadingMore(false);

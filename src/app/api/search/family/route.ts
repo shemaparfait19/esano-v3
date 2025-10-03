@@ -61,8 +61,8 @@ export async function GET(request: Request) {
           if (!testSnapshot.empty) {
             console.log(`Found data in collection: ${collectionName}`);
             userCollection = collectionName;
-            // Get more documents from the working collection
-            userSnapshot = await testRef.limit(50).get();
+            // Get fewer documents to save quota
+            userSnapshot = await testRef.limit(10).get();
             break;
           } else {
             console.log(`Collection ${collectionName} is empty`);

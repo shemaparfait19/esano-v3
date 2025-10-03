@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "@/contexts/auth-context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { SuggestionCard } from "@/components/dashboard/suggestion-card";
@@ -68,6 +68,10 @@ export default function DashboardPage() {
   const [suggestions, setSuggestions] = useState<SuggestedMatch[] | null>(null);
   const [incomingCount, setIncomingCount] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [inlineResults, setInlineResults] = useState<any[]>([]);
+  const [inlineOpen, setInlineOpen] = useState(false);
+  const [inlineLoading, setInlineLoading] = useState(false);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -82,6 +86,39 @@ export default function DashboardPage() {
       handleSearch();
     }
   };
+
+  // Debounce dashboard search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 500);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Inline live search using optimized endpoint with strict limit
+  const fetchInlineResults = useCallback(async (q: string) => {
+    if (!q || q.trim().length < 3) {
+      setInlineResults([]);
+      setInlineOpen(false);
+      return;
+    }
+    try {
+      setInlineLoading(true);
+      const params = new URLSearchParams({ query: q.trim(), limit: "5" });
+      const res = await fetch(`/api/search/optimized?${params}`);
+      if (!res.ok) throw new Error("search failed");
+      const data = await res.json();
+      setInlineResults(data.results || []);
+      setInlineOpen((data.results || []).length > 0);
+    } catch {
+      setInlineResults([]);
+      setInlineOpen(false);
+    } finally {
+      setInlineLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInlineResults(debouncedQuery);
+  }, [debouncedQuery, fetchInlineResults]);
 
   useEffect(() => {
     let ignore = false;
@@ -193,23 +230,62 @@ export default function DashboardPage() {
 
       {/* Search Bar */}
       <div className="flex justify-center mb-8">
-        <div className="flex border-2 border-primary overflow-hidden max-w-md mx-auto rounded-lg">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Search for lost family members..."
-            className="w-full outline-none bg-white text-gray-600 text-sm px-4 py-3"
-          />
-          <button
-            type="button"
-            onClick={handleSearch}
-            className="flex items-center justify-center bg-primary hover:bg-primary/90 px-5 text-sm text-white"
-          >
-            <Search className="h-4 w-4 mr-1" />
-            Search
-          </button>
+        <div className="relative w-full max-w-md mx-auto">
+          <div className="flex border-2 border-primary overflow-hidden rounded-lg">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Search for lost family members..."
+              className="w-full outline-none bg-white text-gray-600 text-sm px-4 py-3"
+              autoComplete="off"
+              spellCheck={false}
+              onFocus={() => inlineResults.length && setInlineOpen(true)}
+            />
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="flex items-center justify-center bg-primary hover:bg-primary/90 px-5 text-sm text-white"
+            >
+              <Search className="h-4 w-4 mr-1" />
+              Search
+            </button>
+          </div>
+          {inlineOpen && (
+            <div className="absolute z-20 mt-1 w-full bg-card border rounded-md shadow-lg overflow-hidden">
+              {inlineLoading ? (
+                <div className="p-3 text-sm text-muted-foreground">
+                  Searching…
+                </div>
+              ) : inlineResults.length === 0 ? (
+                <div className="p-3 text-sm text-muted-foreground">
+                  No results
+                </div>
+              ) : (
+                <ul className="max-h-64 overflow-auto">
+                  {inlineResults.map((r: any) => (
+                    <li
+                      key={r.id}
+                      className="p-3 hover:bg-muted cursor-pointer"
+                      onClick={() =>
+                        router.push(
+                          `/dashboard/search?q=${encodeURIComponent(
+                            searchQuery.trim()
+                          )}`
+                        )
+                      }
+                    >
+                      <div className="text-sm font-medium">{r.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {r.location || r.birthPlace || ""}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

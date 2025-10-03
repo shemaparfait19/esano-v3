@@ -23,11 +23,11 @@ export default function SearchInput({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  // Debounce the search query
+  // Debounce the search query (500ms for quota-friendly searching)
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query);
-    }, 300); // 300ms debounce delay
+    }, 500); // 500ms debounce delay to reduce Firestore reads
 
     return () => clearTimeout(timer);
   }, [query]);
