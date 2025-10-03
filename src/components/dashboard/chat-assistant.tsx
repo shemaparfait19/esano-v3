@@ -43,17 +43,26 @@ export function ChatAssistant() {
 
     startTransition(async () => {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: userMessage.text, userId: user?.uid }),
+          signal: controller.signal,
         });
-        const data = await res.json();
+        clearTimeout(timeout);
+        let data: any = null;
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
         const assistantResponseText =
           data?.response ??
           (data?.error
             ? `Error: ${data.error}${data.detail ? ` — ${data.detail}` : ""}`
-            : "I'm sorry, I'm having trouble connecting right now. Please try again later.");
+            : "Assistant is temporarily unavailable. Please try again in a moment.");
         const assistantMessage: Message = {
           id: Date.now() + 1,
           role: "assistant",
@@ -66,7 +75,7 @@ export function ChatAssistant() {
           {
             id: Date.now() + 1,
             role: "assistant",
-            text: "I couldn't reach the assistant service. Please try again in a moment.",
+            text: "Request timed out or failed. Please try again.",
           },
         ]);
       }
