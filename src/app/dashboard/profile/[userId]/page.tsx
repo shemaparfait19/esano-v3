@@ -45,7 +45,7 @@ export default function OtherUserProfilePage() {
       // detect pending requests for current viewer (if logged in) – incoming or outgoing
       if (user && user.uid) {
         const ref = collection(db, "connectionRequests");
-        const [inSnap, outSnap] = await Promise.all([
+        const [inSnap, outSnap, accAB, accBA] = await Promise.all([
           getDocs(
             query(
               ref,
@@ -62,10 +62,27 @@ export default function OtherUserProfilePage() {
               where("status", "==", "pending")
             )
           ),
+          getDocs(
+            query(
+              ref,
+              where("fromUserId", "==", user.uid),
+              where("toUserId", "==", userId),
+              where("status", "==", "accepted")
+            )
+          ),
+          getDocs(
+            query(
+              ref,
+              where("fromUserId", "==", userId),
+              where("toUserId", "==", user.uid),
+              where("status", "==", "accepted")
+            )
+          ),
         ]);
         if (!ignore) {
           setIncomingId(inSnap.docs[0]?.id ?? null);
           setOutgoingExists(outSnap.size > 0);
+          setIsConnected(accAB.size > 0 || accBA.size > 0);
         }
 
         // Check connected status
