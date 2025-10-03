@@ -613,6 +613,7 @@ export default function ProfilePage() {
                         try {
                           const formData = new FormData();
                           formData.append("file", file);
+                          if (user?.uid) formData.append("userId", user.uid);
                           console.log("Sending FormData to API");
 
                           const response = await fetch(
@@ -628,6 +629,7 @@ export default function ProfilePage() {
                           if (response.ok) {
                             const data = await response.json();
                             console.log("Upload successful, URL:", data.url);
+                            // Avoid saving giant data URLs directly in profile to bypass 1MB field limit
                             setForm((f) => ({
                               ...f,
                               profilePicture: data.url,
@@ -636,13 +638,15 @@ export default function ProfilePage() {
                               title: "Profile picture uploaded successfully",
                             });
                           } else {
-                            const error = await response.json();
-                            console.log("Upload failed:", error);
+                            let errorMsg = "Failed to upload profile picture";
+                            try {
+                              const err = await response.json();
+                              errorMsg = err?.error || errorMsg;
+                            } catch {}
+                            console.log("Upload failed:", errorMsg);
                             toast({
                               title: "Upload failed",
-                              description:
-                                error.error ||
-                                "Failed to upload profile picture",
+                              description: errorMsg,
                               variant: "destructive",
                             });
                           }

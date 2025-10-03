@@ -53,6 +53,7 @@ export function DashboardHeader() {
   const [pendingItems, setPendingItems] = useState<any[]>([]);
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [recentMsgs, setRecentMsgs] = useState<any[]>([]);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   const handleSignOut = async () => {
     await signOut();
@@ -83,6 +84,27 @@ export function DashboardHeader() {
       }
     );
     return () => unsub();
+  }, [user?.uid]);
+
+  // Load profile picture from Firestore profile
+  useEffect(() => {
+    let ignore = false;
+    async function loadProfile() {
+      try {
+        if (!user?.uid) return;
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (!ignore && snap.exists()) {
+          const d = snap.data() as any;
+          setProfilePhoto(d?.profilePicture || null);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadProfile();
+    return () => {
+      ignore = true;
+    };
   }, [user?.uid]);
 
   // Live unread messages and recent list
@@ -261,6 +283,7 @@ export function DashboardHeader() {
               <Avatar className="h-10 w-10">
                 <AvatarImage
                   src={
+                    profilePhoto ||
                     user?.photoURL ||
                     `https://picsum.photos/seed/${user?.uid}/100`
                   }
