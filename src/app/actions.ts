@@ -95,6 +95,7 @@ export async function analyzeDna(
     };
 
     const hasGemini = !!process.env.GEMINI_API_KEY;
+    const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
 
     // Compute ancestry & insights with graceful fallback
     try {
@@ -102,6 +103,52 @@ export async function analyzeDna(
         const [ancestry, insights] = await Promise.all([
           withRetry(() => analyzeAncestry(ancestryInput)),
           withRetry(() => getGenerationalInsights(insightsInput)),
+        ]);
+        result.ancestry = ancestry;
+        result.insights = insights;
+      } else if (hasOpenRouter) {
+        // Fallback: OpenRouter direct call returning JSON
+        const [ancestry, insights] = await Promise.all([
+          withRetry(() =>
+            openRouterJson(
+              "openrouter/auto",
+              [
+                {
+                  role: "system",
+                  content:
+                    "You are an ancestry estimator. Output strict JSON only.",
+                },
+                {
+                  role: "user",
+                  content: `Analyze SNP data and return JSON with fields: ethnicityEstimates (array of {label,percent,confidence}), summary. SNP: ${safeDnaData.slice(
+                    0,
+                    50000
+                  )}`,
+                },
+              ],
+              { ethnicityEstimates: [], summary: "" }
+            )
+          ),
+          withRetry(() =>
+            openRouterJson(
+              "openrouter/auto",
+              [
+                {
+                  role: "system",
+                  content:
+                    "You analyze genetic markers. Output strict JSON only.",
+                },
+                {
+                  role: "user",
+                  content: `From these markers, return JSON with healthInsights (array), traitInsights (array), ancestryInsights (array). Markers: ${safeDnaData.slice(
+                    0,
+                    50000
+                  )}`,
+                },
+              ],
+              { healthInsights: [], traitInsights: [], ancestryInsights: [] }
+            )
+          ),
         ]);
         result.ancestry = ancestry;
         result.insights = insights;
@@ -123,15 +170,40 @@ export async function analyzeDna(
 
     // Predict relatives only if we have comparators and AI available
     try {
-      if (hasGemini && otherUsersDnaData.length > 0) {
+      if ((hasGemini || hasOpenRouter) && otherUsersDnaData.length > 0) {
         const dnaInput: AnalyzeDnaAndPredictRelativesInput = {
           dnaData: safeDnaData,
           otherUsersDnaData: otherUsersDnaData.slice(0, 50),
           userFamilyTreeData: "None",
         };
-        const raw = await withRetry(() =>
-          analyzeDnaAndPredictRelatives(dnaInput)
-        );
+        let raw: any[] = [];
+        if (hasGemini) {
+          raw = await withRetry(() => analyzeDnaAndPredictRelatives(dnaInput));
+        } else if (hasOpenRouter) {
+          raw = await withRetry(() =>
+            openRouterJson(
+              "openrouter/auto",
+              [
+                {
+                  role: "system",
+                  content:
+                    "You predict genetic relatives from DNA. Output a JSON array only.",
+                },
+                {
+                  role: "user",
+                  content: `Given USER_DNA and OTHER_USERS (array of dna strings with synthetic ids), return JSON array of {userId, relationshipProbability} where userId is one of the provided ids, probability 0..1. USER_DNA: ${safeDnaData.slice(
+                    0,
+                    50000
+                  )} OTHER_USERS: ${otherUsersDnaData
+                    .slice(0, 50)
+                    .map((s, i) => `id_${i}:${s.slice(0, 3000)}`)
+                    .join("\n")}`,
+                },
+              ],
+              []
+            )
+          );
+        }
         result.relatives = (raw || [])
           .filter(
             (r) =>
@@ -186,6 +258,40 @@ export async function analyzeDna(
       error:
         error?.message || "Failed to analyze DNA data. Please try again later.",
     };
+  }
+}
+
+// Minimal OpenRouter JSON helper (server-only)
+async function openRouterJson(
+  model: string,
+  messages: { role: string; content: string }[],
+  fallback: any
+) {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) return fallback;
+  try {
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost",
+        "X-Title": "eSANO",
+      },
+      body: JSON.stringify({
+        model,
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        max_tokens: 1200,
+        messages,
+      }),
+    });
+    if (!resp.ok) return fallback;
+    const data = await resp.json();
+    const text = data?.choices?.[0]?.message?.content || "";
+    return JSON.parse(text);
+  } catch {
+    return fallback;
   }
 }
 
