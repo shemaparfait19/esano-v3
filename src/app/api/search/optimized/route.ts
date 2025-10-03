@@ -57,6 +57,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query")?.trim();
     const limit = Math.min(parseInt(searchParams.get("limit") || "10"), 10); // Max 10 results
+    const currentLocation =
+      searchParams.get("currentLocation")?.toLowerCase() || "";
+    const knownLocationsParam = searchParams.get("knownLocations") || "";
+    const knownLocations = knownLocationsParam
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
 
     if (!query || query.length < 3) {
       return NextResponse.json({
@@ -78,7 +85,10 @@ export async function GET(request: NextRequest) {
     const searchTerms = parseSearchQuery(query);
 
     // Search users with optimized queries
-    const { results, debug } = await searchUsers(searchTerms, limit);
+    const { results, debug } = await searchUsers(searchTerms, limit, {
+      currentLocation,
+      knownLocations,
+    });
 
     console.log(`✅ Found ${results.length} results for "${query}"`);
 
@@ -252,8 +262,27 @@ async function searchUsers(
     }
   }
 
+  // Apply context-aware scoring boosts (instant, lightweight)
+  const userCurrentLoc = (context?.currentLocation || "").toLowerCase();
+  const userKnownLocs = (context?.knownLocations || []).map((x) =>
+    x.toLowerCase()
+  );
+
+  const boosted = results.map((r) => {
+    let boost = 0;
+    const loc = (r.location || "").toLowerCase();
+    if (userCurrentLoc && loc && loc.includes(userCurrentLoc)) boost += 5;
+    if (
+      userKnownLocs.length &&
+      loc &&
+      userKnownLocs.some((k) => loc.includes(k))
+    )
+      boost += 3;
+    return { ...r, matchScore: r.matchScore + boost };
+  });
+
   // Sort by match score and return top results
-  let finalResults = results
+  let finalResults = boosted
     .sort((a, b) => b.matchScore - a.matchScore)
     .slice(0, limit);
 
