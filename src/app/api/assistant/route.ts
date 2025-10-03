@@ -283,14 +283,23 @@ export async function POST(req: Request) {
           headers: {
             Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
             "Content-Type": "application/json",
+            // Identify the app per OpenRouter requirements to avoid 402/org issues
+            "HTTP-Referer":
+              process.env.NEXT_PUBLIC_APP_URL || "http://localhost",
+            "X-Title": process.env.OPENROUTER_APP_TITLE || "eSANO",
           },
           body: JSON.stringify({
             // Default to a widely available model; allow override via env
-            model: process.env.OPENROUTER_MODEL || "deepseek/deepseek-chat",
+            model:
+              process.env.OPENROUTER_MODEL ||
+              process.env.NEXT_PUBLIC_OPENROUTER_MODEL ||
+              "openrouter/auto",
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: composedUser },
             ],
+            max_tokens: 512,
+            temperature: 0.2,
           }),
           signal: orController.signal,
         }
