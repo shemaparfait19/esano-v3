@@ -186,7 +186,7 @@ export default function Home() {
                 className="group block relative"
               >
                 <Image
-                  src="https://img.youtube.com/vi/fkGCLIQx1MI/maxresdefault.jpg"
+                  src="/asset/youtubethumbnail.png"
                   alt="How to use the system - video thumbnail"
                   width={1280}
                   height={720}
