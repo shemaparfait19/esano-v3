@@ -12,6 +12,8 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MapPin, MessageCircle, UserPlus, CheckCircle } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -30,6 +32,7 @@ export default function OtherUserProfilePage() {
   const [loading, setLoading] = useState(true);
   const [incomingId, setIncomingId] = useState<string | null>(null);
   const [outgoingExists, setOutgoingExists] = useState<boolean>(false);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -64,10 +67,28 @@ export default function OtherUserProfilePage() {
           setIncomingId(inSnap.docs[0]?.id ?? null);
           setOutgoingExists(outSnap.size > 0);
         }
+
+        // Check connected status
+        try {
+          const conRef = collection(db, "connections");
+          const conSnap = await getDocs(
+            query(
+              conRef,
+              where("status", "==", "connected"),
+              where("participants", "array-contains", user.uid)
+            )
+          );
+          const connected = conSnap.docs.some((d) => {
+            const arr = (d.data() as any)?.participants || [];
+            return Array.isArray(arr) && arr.includes(userId);
+          });
+          if (!ignore) setIsConnected(connected);
+        } catch {}
       } else {
         if (!ignore) {
           setIncomingId(null);
           setOutgoingExists(false);
+          setIsConnected(false);
         }
       }
       setLoading(false);
@@ -95,18 +116,117 @@ export default function OtherUserProfilePage() {
       .filter(Boolean)
       .join(" ");
 
+  const handleConnect = async () => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const resp = await fetch("/api/requests", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ recipientUid: userId }),
+      });
+      if (!resp.ok) throw new Error("Failed to send request");
+      setOutgoingExists(true);
+      toast({ title: "Connection request sent" });
+    } catch (e: any) {
+      toast({
+        title: "Failed",
+        description: e?.message || "Try again",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-headline text-3xl font-bold text-primary md:text-4xl">
-          {name || "Profile"}
-        </h1>
-        {profile.location && (
-          <p className="mt-2 text-lg text-muted-foreground">
-            {profile.location}
-          </p>
-        )}
-      </div>
+      {/* Header with avatar and actions */}
+      <Card>
+        <CardContent className="p-6 flex flex-col md:flex-row items-start md:items-center gap-4">
+          <Avatar className="h-20 w-20">
+            <AvatarImage src={profile.profilePicture} alt={name || "Profile"} />
+            <AvatarFallback>{(name || "U").charAt(0)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-headline text-2xl md:text-3xl font-bold text-primary truncate">
+              {name || "Profile"}
+            </h1>
+            <div className="mt-1 flex items-center gap-2 text-muted-foreground">
+              {profile.location && (
+                <span className="flex items-center gap-1 text-sm">
+                  <MapPin className="h-4 w-4" /> {profile.location}
+                </span>
+              )}
+              {profile.clanOrCulturalInfo && (
+                <span className="text-sm">· {profile.clanOrCulturalInfo}</span>
+              )}
+            </div>
+          </div>
+          {user && user.uid !== userId && (
+            <div className="flex gap-2">
+              {isConnected ? (
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    location.assign(`/dashboard/messages?peer=${userId}`)
+                  }
+                >
+                  <MessageCircle className="h-4 w-4 mr-1" /> Chat
+                </Button>
+              ) : incomingId ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      await setDoc(
+                        doc(db, "connectionRequests", incomingId!),
+                        {
+                          status: "accepted",
+                          respondedAt: new Date().toISOString(),
+                        },
+                        { merge: true }
+                      );
+                      toast({ title: "Request accepted" });
+                      setIncomingId(null);
+                      setIsConnected(true);
+                    }}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" /> Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      await setDoc(
+                        doc(db, "connectionRequests", incomingId!),
+                        {
+                          status: "declined",
+                          respondedAt: new Date().toISOString(),
+                        },
+                        { merge: true }
+                      );
+                      toast({ title: "Request declined" });
+                      setIncomingId(null);
+                    }}
+                  >
+                    Decline
+                  </Button>
+                </>
+              ) : outgoingExists ? (
+                <Button size="sm" variant="outline" disabled>
+                  <UserPlus className="h-4 w-4 mr-1" /> Pending
+                </Button>
+              ) : (
+                <Button size="sm" onClick={handleConnect}>
+                  <UserPlus className="h-4 w-4 mr-1" /> Connect
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -126,6 +246,18 @@ export default function OtherUserProfilePage() {
             <div>
               <div className="text-sm text-muted-foreground">Birth Place</div>
               <div>{profile.birthPlace}</div>
+            </div>
+          )}
+          {profile.province && (
+            <div>
+              <div className="text-sm text-muted-foreground">Province</div>
+              <div>{profile.province}</div>
+            </div>
+          )}
+          {profile.district && (
+            <div>
+              <div className="text-sm text-muted-foreground">District</div>
+              <div>{profile.district}</div>
             </div>
           )}
           {profile.nationality && (
