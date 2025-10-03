@@ -73,7 +73,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const cacheKey = `q:${query}|l:${limit}`;
+    const userId = (searchParams.get("userId") || "").trim();
+    const cacheKey = `q:${query}|l:${limit}|u:${userId}|cl:${currentLocation}|kl:${knownLocations.join(
+      "|"
+    )}`;
     const cached = getCache(cacheKey);
     if (cached) {
       return NextResponse.json(cached);
@@ -88,6 +91,7 @@ export async function GET(request: NextRequest) {
     const { results, debug } = await searchUsers(searchTerms, limit, {
       currentLocation,
       knownLocations,
+      userId,
     });
 
     console.log(`✅ Found ${results.length} results for "${query}"`);
@@ -177,12 +181,17 @@ function parseSearchQuery(query: string) {
  */
 async function searchUsers(
   searchTerms: any,
-  limit: number
+  limit: number,
+  context?: {
+    currentLocation?: string;
+    knownLocations?: string[];
+    userId?: string;
+  }
 ): Promise<{ results: SearchResult[]; debug: any }> {
   const results: SearchResult[] = [];
   const seenIds = new Set<string>();
   let remainingBudget = Math.max(1, limit); // cap queries based on need
-  const debug: any = { collectionTried: [], fieldsTried: [] };
+  const debug: any = { collectionTried: [], fieldsTried: [], boosts: {} };
 
   // Try different collection names (but limit to save quota)
   const possibleCollections = ["users", "profiles", "userProfiles"];
@@ -212,6 +221,36 @@ async function searchUsers(
 
   const collectionRef = adminDb.collection(userCollection);
   debug.collectionTried.push(userCollection);
+
+  // Load known connections for boosting if userId present
+  const connectedUserIds = new Set<string>();
+  if (context?.userId) {
+    try {
+      const candidates = [
+        "connections",
+        "userConnections",
+        "connectionRequests",
+      ];
+      for (const coll of candidates) {
+        try {
+          const snap = await adminDb
+            .collection(coll)
+            .where("status", "==", "connected")
+            .where("participants", "array-contains", context.userId)
+            .limit(50)
+            .get();
+          snap.docs.forEach((d) => {
+            const data = d.data() as any;
+            const others: string[] = (data.participants || []).filter(
+              (p: string) => p && p !== context.userId
+            );
+            others.forEach((id) => connectedUserIds.add(id));
+          });
+        } catch {}
+      }
+      debug.boosts.connectedCount = connectedUserIds.size;
+    } catch {}
+  }
 
   // Helper to run a prefix query on multiple possible fields
   async function runPrefixQuery(field: string, term: string) {
@@ -281,6 +320,8 @@ async function searchUsers(
       userKnownLocs.some((k) => loc.includes(k))
     )
       boost += 3;
+    // Boost direct connections strongly
+    if (connectedUserIds.has(r.id)) boost += 20;
     return { ...r, matchScore: r.matchScore + boost };
   });
 
