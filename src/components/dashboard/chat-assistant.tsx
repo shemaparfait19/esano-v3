@@ -94,7 +94,7 @@ export function ChatAssistant() {
               )}
               <div
                 className={cn(
-                  "max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg",
+                  "max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg !rounded-xl",
                   message.role === "user"
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted"
