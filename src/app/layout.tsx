@@ -9,6 +9,11 @@ export const metadata: Metadata = {
   title: "Esano: AI Genealogy Explorer",
   description:
     "Explore your ancestry and connect with relatives through AI-powered DNA analysis.",
+  icons: {
+    icon: "/assets/favicon.png",
+    shortcut: "/assets/favicon.png",
+    apple: "/assets/favicon.png",
+  },
 };
 
 export default function RootLayout({
