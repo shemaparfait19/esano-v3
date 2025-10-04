@@ -30,22 +30,21 @@ async function buildKinshipFacts(userId: string) {
         if (gp?.fullName) facts.push(`${gp.fullName} is my grandparent.`);
       });
     });
-    return facts.slice(0, 20); // Reduced from 50
+    return facts.slice(0, 20);
   } catch {
     return [];
   }
 }
 
-// Optimized: Get only recent messages with indexed queries
+// Recent messages fetcher (optional optimization)
 async function getRecentMessages(userId: string) {
   try {
-    // Use indexed queries instead of scanning all messages
     const [sentDocs, receivedDocs] = await Promise.all([
       adminDb
         .collection("messages")
         .where("senderId", "==", userId)
         .orderBy("createdAt", "desc")
-        .limit(5) // Only get 5 most recent
+        .limit(5)
         .get(),
       adminDb
         .collection("messages")
@@ -55,17 +54,15 @@ async function getRecentMessages(userId: string) {
         .get(),
     ]);
 
-    return [...sentDocs.docs, ...receivedDocs.docs]
-      .map((d) => {
-        const data = d.data() as any;
-        return {
-          peerId: data.senderId === userId ? data.receiverId : data.senderId,
-          direction: data.senderId === userId ? "out" : "in",
-          text: typeof data.text === "string" ? data.text.slice(0, 150) : "",
-          createdAt: data.createdAt,
-        };
-      })
-      .slice(0, 10);
+    return [...sentDocs.docs, ...receivedDocs.docs].map((d) => {
+      const data = d.data() as any;
+      return {
+        peerId: data.senderId === userId ? data.receiverId : data.senderId,
+        direction: data.senderId === userId ? "out" : "in",
+        text: typeof data.text === "string" ? data.text.slice(0, 150) : "",
+        createdAt: data.createdAt,
+      };
+    });
   } catch (e) {
     console.error("Failed to fetch messages:", e);
     return [];
@@ -83,7 +80,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing query" }, { status: 400 });
     }
 
-    // Diagnostics endpoint
+    // === Diagnostics endpoint ===
     if (query === "__diag") {
       const hasGemini = Boolean(process.env.GEMINI_API_KEY);
       const hasDeepseek = Boolean(process.env.DEEPSEEK_API_KEY);
@@ -98,7 +95,7 @@ export async function POST(req: Request) {
 
     let subjectUserId: string | undefined = userId;
 
-    // Connection check for targetUserId
+    // === Access validation for target user ===
     if (targetUserId && targetUserId !== subjectUserId && subjectUserId) {
       const reqsSnap = await adminDb.collection("connectionRequests").get();
       const accepted = reqsSnap.docs.some((d) => {
@@ -115,22 +112,22 @@ export async function POST(req: Request) {
       subjectUserId = targetUserId;
     }
 
-    // Gather user context with PARALLEL queries and REDUCED data
+    // === User context ===
     let userContext: string | undefined;
     if (subjectUserId) {
       try {
-        // Run ALL database queries in parallel
+        const isFamilyQuestion =
+          /family|parent|child|mother|father|sibling/i.test(query);
         const [profileSnap, treeSnap, kinship, messages] = await Promise.all([
           adminDb.collection("users").doc(subjectUserId).get(),
           adminDb.collection("familyTrees").doc(subjectUserId).get(),
-          buildKinshipFacts(subjectUserId),
+          isFamilyQuestion ? buildKinshipFacts(subjectUserId) : [],
           getRecentMessages(subjectUserId),
         ]);
 
         const profile = profileSnap.exists ? profileSnap.data() : undefined;
         const tree = treeSnap.exists ? treeSnap.data() : undefined;
 
-        // Build minimal context - only essential fields
         const ctx = {
           profile: profile
             ? {
@@ -143,9 +140,9 @@ export async function POST(req: Request) {
           tree: tree
             ? {
                 members: Array.isArray(tree.members)
-                  ? tree.members.slice(0, 15)
+                  ? tree.members.slice(0, 10)
                   : [],
-                edges: Array.isArray(tree.edges) ? tree.edges.slice(0, 30) : [],
+                edges: Array.isArray(tree.edges) ? tree.edges.slice(0, 20) : [],
               }
             : undefined,
           kinship: kinship.slice(0, 10),
@@ -154,15 +151,16 @@ export async function POST(req: Request) {
         userContext = JSON.stringify(ctx);
       } catch (e) {
         console.error("Context gathering failed:", e);
-        // Continue without context rather than failing
       }
     }
 
-    // Try OpenRouter first (with reduced timeout)
+    // === Try AI providers in sequence ===
+
+    // 1️⃣ OpenRouter (primary)
     if (process.env.OPENROUTER_API_KEY) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 7000); // 7s timeout
+        const timeout = setTimeout(() => controller.abort(), 15000); // ⏱ 15s
 
         const response = await fetch(
           "https://openrouter.ai/api/v1/chat/completions",
@@ -190,7 +188,7 @@ export async function POST(req: Request) {
                     : query,
                 },
               ],
-              max_tokens: 250, // Reduced for faster response
+              max_tokens: 250,
               temperature: 0.3,
             }),
             signal: controller.signal,
@@ -202,21 +200,18 @@ export async function POST(req: Request) {
         if (response.ok) {
           const data = await response.json();
           const content = data?.choices?.[0]?.message?.content || "";
-          if (content) {
-            return NextResponse.json({ response: content });
-          }
+          if (content) return NextResponse.json({ response: content });
         }
       } catch (e: any) {
         console.error("OpenRouter failed:", e.message);
-        // Fall through to next provider
       }
     }
 
-    // Try DeepSeek
+    // 2️⃣ DeepSeek (backup)
     if (process.env.DEEPSEEK_API_KEY) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 7000);
+        const timeout = setTimeout(() => controller.abort(), 15000);
 
         const response = await fetch(
           "https://api.deepseek.com/chat/completions",
@@ -252,17 +247,14 @@ export async function POST(req: Request) {
         if (response.ok) {
           const data = await response.json();
           const content = data?.choices?.[0]?.message?.content || "";
-          if (content) {
-            return NextResponse.json({ response: content });
-          }
+          if (content) return NextResponse.json({ response: content });
         }
       } catch (e: any) {
         console.error("DeepSeek failed:", e.message);
-        // Fall through to Gemini
       }
     }
 
-    // Fallback to Gemini (no timeout wrapper - let it use its own)
+    // 3️⃣ Gemini (final fallback)
     if (process.env.GEMINI_API_KEY) {
       const result = await askGenealogyAssistant({ query, userContext });
       return NextResponse.json({ response: result.response });
