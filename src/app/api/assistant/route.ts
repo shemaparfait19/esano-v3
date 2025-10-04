@@ -85,11 +85,16 @@ export async function POST(req: Request) {
       const hasGemini = Boolean(process.env.GEMINI_API_KEY);
       const hasDeepseek = Boolean(process.env.DEEPSEEK_API_KEY);
       const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
+      const openRouterKey = process.env.OPENROUTER_API_KEY
+        ? `${process.env.OPENROUTER_API_KEY.slice(0, 10)}...`
+        : "Not set";
       return NextResponse.json({
         ok: true,
         hasGemini,
         hasDeepseek,
         hasOpenRouter,
+        openRouterKey,
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -156,54 +161,76 @@ export async function POST(req: Request) {
 
     // === Try AI providers in sequence ===
 
-    // 1️⃣ OpenRouter (primary)
+    // 1️⃣ OpenRouter (primary) with retry logic
     if (process.env.OPENROUTER_API_KEY) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000); // ⏱ 15s
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 12000); // ⏱ 12s
 
-        const response = await fetch(
-          "https://openrouter.ai/api/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              "Content-Type": "application/json",
-              "HTTP-Referer":
-                process.env.NEXT_PUBLIC_APP_URL || "http://localhost",
-              "X-Title": "eSANO",
-            },
-            body: JSON.stringify({
-              model: process.env.OPENROUTER_MODEL || "openrouter/auto",
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are a helpful genealogy AI assistant. Be concise.",
-                },
-                {
-                  role: "user",
-                  content: userContext
-                    ? `Context: ${userContext}\n\nQ: ${query}`
-                    : query,
-                },
-              ],
-              max_tokens: 250,
-              temperature: 0.3,
-            }),
-            signal: controller.signal,
+          const response = await fetch(
+            "https://openrouter.ai/api/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer":
+                  process.env.NEXT_PUBLIC_APP_URL || "http://localhost",
+                "X-Title": "eSANO",
+              },
+              body: JSON.stringify({
+                model: process.env.OPENROUTER_MODEL || "openrouter/auto",
+                messages: [
+                  {
+                    role: "system",
+                    content:
+                      "You are a helpful genealogy AI assistant. Be concise and helpful.",
+                  },
+                  {
+                    role: "user",
+                    content: userContext
+                      ? `Context: ${userContext}\n\nQ: ${query}`
+                      : query,
+                  },
+                ],
+                max_tokens: 300,
+                temperature: 0.3,
+              }),
+              signal: controller.signal,
+            }
+          );
+
+          clearTimeout(timeout);
+
+          if (response.ok) {
+            const data = await response.json();
+            const content = data?.choices?.[0]?.message?.content || "";
+            if (content) return NextResponse.json({ response: content });
+          } else {
+            const errorText = await response.text();
+            console.error(
+              `OpenRouter attempt ${attempt} failed:`,
+              response.status,
+              errorText
+            );
+
+            // If it's a 402 (insufficient credits) or 429 (rate limit), don't retry
+            if (response.status === 402 || response.status === 429) {
+              break;
+            }
+
+            // For other errors, wait before retry
+            if (attempt < 2) {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
           }
-        );
-
-        clearTimeout(timeout);
-
-        if (response.ok) {
-          const data = await response.json();
-          const content = data?.choices?.[0]?.message?.content || "";
-          if (content) return NextResponse.json({ response: content });
+        } catch (e: any) {
+          console.error(`OpenRouter attempt ${attempt} error:`, e.message);
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
-      } catch (e: any) {
-        console.error("OpenRouter failed:", e.message);
       }
     }
 
@@ -260,14 +287,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ response: result.response });
     }
 
+    // If we get here, all providers failed
     return NextResponse.json(
-      { error: "No AI provider configured" },
-      { status: 500 }
+      {
+        error: "Assistant temporarily unavailable",
+        detail:
+          "All AI providers are currently unavailable. Please try again in a moment.",
+      },
+      { status: 503 }
     );
   } catch (e: any) {
     console.error("API error:", e);
     return NextResponse.json(
-      { error: "Service error", detail: e?.message ?? "" },
+      {
+        error: "Service error",
+        detail: e?.message ?? "An unexpected error occurred. Please try again.",
+      },
       { status: 500 }
     );
   }
