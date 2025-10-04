@@ -117,45 +117,28 @@ export async function POST(req: Request) {
       subjectUserId = targetUserId;
     }
 
-    // === User context ===
+    // === Simplified user context (faster) ===
     let userContext: string | undefined;
     if (subjectUserId) {
       try {
-        const isFamilyQuestion =
-          /family|parent|child|mother|father|sibling/i.test(query);
-        const [profileSnap, treeSnap, kinship, messages] = await Promise.all([
-          adminDb.collection("users").doc(subjectUserId).get(),
-          adminDb.collection("familyTrees").doc(subjectUserId).get(),
-          isFamilyQuestion ? buildKinshipFacts(subjectUserId) : [],
-          getRecentMessages(subjectUserId),
-        ]);
-
+        // Only get basic profile info to avoid timeouts
+        const profileSnap = await adminDb
+          .collection("users")
+          .doc(subjectUserId)
+          .get();
         const profile = profileSnap.exists ? profileSnap.data() : undefined;
-        const tree = treeSnap.exists ? treeSnap.data() : undefined;
 
-        const ctx = {
-          profile: profile
-            ? {
-                firstName: profile.firstName,
-                lastName: profile.lastName,
-                birthDate: profile.birthDate,
-                birthPlace: profile.birthPlace,
-              }
-            : undefined,
-          tree: tree
-            ? {
-                members: Array.isArray(tree.members)
-                  ? tree.members.slice(0, 10)
-                  : [],
-                edges: Array.isArray(tree.edges) ? tree.edges.slice(0, 20) : [],
-              }
-            : undefined,
-          kinship: kinship.slice(0, 10),
-          messages: messages.slice(0, 5),
-        };
-        userContext = JSON.stringify(ctx);
+        if (profile) {
+          userContext = JSON.stringify({
+            name: profile.firstName
+              ? `${profile.firstName} ${profile.lastName || ""}`.trim()
+              : "User",
+            location: profile.location || profile.birthPlace || "Unknown",
+          });
+        }
       } catch (e) {
         console.error("Context gathering failed:", e);
+        // Continue without context rather than failing
       }
     }
 
@@ -166,7 +149,7 @@ export async function POST(req: Request) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 12000); // ⏱ 12s
+          const timeout = setTimeout(() => controller.abort(), 8000); // ⏱ 8s
 
           const response = await fetch(
             "https://openrouter.ai/api/v1/chat/completions",

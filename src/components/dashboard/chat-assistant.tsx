@@ -66,8 +66,8 @@ export function ChatAssistant() {
     abortControllerRef.current = controller;
 
     try {
-      // Reduced timeout to 10 seconds
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      // Reduced timeout to 8 seconds to match API
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const res = await fetch("/api/assistant", {
         method: "POST",
