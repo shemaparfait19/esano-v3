@@ -144,7 +144,22 @@ export async function POST(req: Request) {
 
     // === Try AI providers in sequence ===
 
-    // 1️⃣ OpenRouter (primary) with retry logic
+    // 1️⃣ Gemini (primary) - most reliable
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        console.log("Attempting Gemini with query:", query);
+        const result = await askGenealogyAssistant({ query, userContext });
+        console.log("Gemini success:", result);
+        return NextResponse.json({ response: result.response });
+      } catch (e: any) {
+        console.error("Gemini failed:", e.message, e.stack);
+        // Continue to next provider instead of failing
+      }
+    } else {
+      console.log("GEMINI_API_KEY not found in environment");
+    }
+
+    // 2️⃣ OpenRouter (backup) with retry logic
     if (process.env.OPENROUTER_API_KEY) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
@@ -217,11 +232,11 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2️⃣ DeepSeek (backup)
+    // 3️⃣ DeepSeek (final fallback)
     if (process.env.DEEPSEEK_API_KEY) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+        const timeout = setTimeout(() => controller.abort(), 8000);
 
         const response = await fetch(
           "https://api.deepseek.com/chat/completions",
@@ -264,21 +279,11 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3️⃣ Gemini (final fallback)
-    if (process.env.GEMINI_API_KEY) {
-      const result = await askGenealogyAssistant({ query, userContext });
-      return NextResponse.json({ response: result.response });
-    }
-
-    // If we get here, all providers failed
-    return NextResponse.json(
-      {
-        error: "Assistant temporarily unavailable",
-        detail:
-          "All AI providers are currently unavailable. Please try again in a moment.",
-      },
-      { status: 503 }
-    );
+    // If we get here, all providers failed - return a simple response instead of error
+    return NextResponse.json({
+      response:
+        "I'm having trouble connecting to the AI service right now. Please try again in a moment, or try asking a shorter question.",
+    });
   } catch (e: any) {
     console.error("API error:", e);
     return NextResponse.json(
