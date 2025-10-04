@@ -29,6 +29,14 @@
     --chart-3: 120 20% 60%;
     --chart-4: 45 50% 70%;
     --chart-5: 120 10% 75%;
+    --sidebar-background: 120 17% 98%;
+    --sidebar-foreground: 120 25% 15%;
+    --sidebar-primary: 120 39% 37%;
+    --sidebar-primary-foreground: 120 25% 98%;
+    --sidebar-accent: 120 39% 37%;
+    --sidebar-accent-foreground: 120 25% 98%;
+    --sidebar-border: 120 10% 85%;
+    --sidebar-ring: 120 39% 42%;
   }
 
   .dark {
@@ -56,6 +64,14 @@
     --chart-3: 120 20% 50%;
     --chart-4: 45 50% 60%;
     --chart-5: 120 10% 65%;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 120 39% 47%;
+    --sidebar-primary-foreground: 120 25% 98%;
+    --sidebar-accent: 120 39% 47%;
+    --sidebar-accent-foreground: 120 25% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 120 39% 57%;
   }
 }
 
@@ -84,5 +100,40 @@
   .rounded-full,
   .avatar {
     border-radius: 9999px !important;
+  }
+
+  /* Mobile responsiveness improvements */
+  @media (max-width: 768px) {
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 50;
+      transition: transform 0.3s ease-in-out;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 40;
+    }
+  }
+
+  /* Smooth transitions for all interactive elements */
+  .transition-smooth {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Active tab styling */
+  .active-tab {
+    background-color: rgb(34 197 94) !important;
+    color: white !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
   }
 }

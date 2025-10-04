@@ -11,6 +11,8 @@ import {
   Users,
   Loader2,
   Search,
+  Menu,
+  X,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import {
@@ -25,7 +27,9 @@ import {
 } from "@/components/ui/sidebar";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { useAuth } from "@/contexts/auth-context";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Dashboard" },
@@ -46,6 +50,8 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { user, loading, userProfile } = useAuth();
   const router = useRouter();
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -76,23 +82,50 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader>
-          <div className="flex items-center gap-2">
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <Sidebar
+        className={`sidebar ${
+          isMobile ? (sidebarOpen ? "translate-x-0" : "-translate-x-full") : ""
+        }`}
+      >
+        <SidebarHeader className="bg-sidebar border-b border-sidebar-border">
+          <div className="flex items-center justify-between gap-2 px-4 py-3">
             <Logo className="h-10 w-28" />
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(false)}
+                className="md:hidden"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </SidebarHeader>
-        <SidebarContent>
-          <SidebarMenu>
+        <SidebarContent className="bg-sidebar">
+          <SidebarMenu className="px-2 py-4">
             {navItems.map((item) => (
               <SidebarMenuItem key={item.href}>
-                <Link href={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={() => isMobile && setSidebarOpen(false)}
+                  className="block"
+                >
                   <SidebarMenuButton
                     isActive={pathname === item.href}
                     tooltip={{ children: item.label }}
+                    className="w-full transition-all duration-300 ease-in-out hover:scale-105"
                   >
-                    <item.icon />
-                    <span>{item.label}</span>
+                    <item.icon className="h-4 w-4" />
+                    <span className="font-medium">{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
@@ -100,9 +133,23 @@ export default function DashboardLayout({
           </SidebarMenu>
         </SidebarContent>
       </Sidebar>
-      <SidebarInset>
+      <SidebarInset className="flex flex-col min-h-screen">
+        <div className="flex items-center justify-between p-4 border-b border-sidebar-border bg-background md:hidden">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden transition-all duration-300 hover:scale-110"
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+          <Logo className="h-8 w-20" />
+          <div className="w-8" /> {/* Spacer for centering */}
+        </div>
         <DashboardHeader />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-6 lg:p-8 bg-background">
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );
