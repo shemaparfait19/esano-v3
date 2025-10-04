@@ -144,15 +144,56 @@ export async function POST(req: Request) {
 
     // === Try AI providers in sequence ===
 
-    // 1️⃣ Gemini (primary) - most reliable
+    // 1️⃣ Gemini (primary) - direct API call
     if (process.env.GEMINI_API_KEY) {
       try {
-        console.log("Attempting Gemini with query:", query);
-        const result = await askGenealogyAssistant({ query, userContext });
-        console.log("Gemini success:", result);
-        return NextResponse.json({ response: result.response });
+        console.log("Attempting Gemini direct API with query:", query);
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `You are a helpful genealogy AI assistant. Be concise and helpful.
+
+${userContext ? `User context: ${userContext}\n\n` : ""}Question: ${query}`,
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                maxOutputTokens: 300,
+                temperature: 0.3,
+              },
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const content =
+            data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (content) {
+            console.log("Gemini direct API success");
+            return NextResponse.json({ response: content });
+          }
+        } else {
+          const errorText = await response.text();
+          console.error(
+            "Gemini direct API failed:",
+            response.status,
+            errorText
+          );
+        }
       } catch (e: any) {
-        console.error("Gemini failed:", e.message, e.stack);
+        console.error("Gemini direct API error:", e.message, e.stack);
         // Continue to next provider instead of failing
       }
     } else {
