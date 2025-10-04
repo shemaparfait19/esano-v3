@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { askGenealogyAssistant } from "@/ai/flows/ai-genealogy-assistant";
 import { adminDb } from "@/lib/firebase-admin";
+
 async function buildKinshipFacts(userId: string) {
   try {
     const treeSnap = await adminDb.collection("familyTrees").doc(userId).get();
-    if (!treeSnap.exists) return [] as string[];
+    if (!treeSnap.exists) return [];
     const tree = treeSnap.data() as any;
     const members: Record<string, any> = Object.fromEntries(
       (tree.members || []).map((m: any) => [m.id, m])
@@ -29,74 +30,76 @@ async function buildKinshipFacts(userId: string) {
         if (gp?.fullName) facts.push(`${gp.fullName} is my grandparent.`);
       });
     });
-    return facts.slice(0, 50);
+    return facts.slice(0, 20); // Reduced from 50
   } catch {
-    return [] as string[];
+    return [];
   }
 }
 
-export const runtime = "nodejs"; // ensure Node runtime (not edge)
-export const dynamic = "force-dynamic"; // avoid caching
+// Optimized: Get only recent messages with indexed queries
+async function getRecentMessages(userId: string) {
+  try {
+    // Use indexed queries instead of scanning all messages
+    const [sentDocs, receivedDocs] = await Promise.all([
+      adminDb
+        .collection("messages")
+        .where("senderId", "==", userId)
+        .orderBy("createdAt", "desc")
+        .limit(5) // Only get 5 most recent
+        .get(),
+      adminDb
+        .collection("messages")
+        .where("receiverId", "==", userId)
+        .orderBy("createdAt", "desc")
+        .limit(5)
+        .get(),
+    ]);
 
-async function withRetry<T>(fn: () => Promise<T>, tries = 2) {
-  let lastErr: any;
-  for (let i = 0; i < tries; i++) {
-    try {
-      return await fn();
-    } catch (e: any) {
-      lastErr = e;
-      await new Promise((r) => setTimeout(r, 300 * (i + 1)));
-    }
+    return [...sentDocs.docs, ...receivedDocs.docs]
+      .map((d) => {
+        const data = d.data() as any;
+        return {
+          peerId: data.senderId === userId ? data.receiverId : data.senderId,
+          direction: data.senderId === userId ? "out" : "in",
+          text: typeof data.text === "string" ? data.text.slice(0, 150) : "",
+          createdAt: data.createdAt,
+        };
+      })
+      .slice(0, 10);
+  } catch (e) {
+    console.error("Failed to fetch messages:", e);
+    return [];
   }
-  throw lastErr;
 }
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
     const { query, userId, scope, targetUserId } = await req.json();
+
     if (!query || typeof query !== "string") {
       return NextResponse.json({ error: "Missing query" }, { status: 400 });
     }
-    // Lightweight diagnostics endpoint to verify configuration without exposing secrets
+
+    // Diagnostics endpoint
     if (query === "__diag") {
       const hasGemini = Boolean(process.env.GEMINI_API_KEY);
       const hasDeepseek = Boolean(process.env.DEEPSEEK_API_KEY);
       const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
-      const hasServiceAccount = Boolean(process.env.SERVICE_ACCOUNT_JSON);
-      let firebaseOk = false as boolean;
-      let firebaseError = undefined as string | undefined;
-      try {
-        // Perform a harmless no-op access to ensure admin SDK is initialized
-        await adminDb.collection("__diag").doc("ping").get();
-        firebaseOk = true;
-      } catch (e: any) {
-        firebaseOk = false;
-        firebaseError = e?.message ?? String(e);
-      }
       return NextResponse.json({
         ok: true,
         hasGemini,
         hasDeepseek,
         hasOpenRouter,
-        hasServiceAccount,
-        firebaseOk,
-        firebaseError,
-        runtime,
-        dynamic,
       });
     }
 
-    // Determine whose data to load
-    let subjectUserId: string | undefined = undefined;
-    if (typeof userId === "string" && userId.length > 0) subjectUserId = userId;
+    let subjectUserId: string | undefined = userId;
 
-    // If targetUserId provided and different, require accepted connection
-    if (
-      targetUserId &&
-      typeof targetUserId === "string" &&
-      subjectUserId &&
-      targetUserId !== subjectUserId
-    ) {
+    // Connection check for targetUserId
+    if (targetUserId && targetUserId !== subjectUserId && subjectUserId) {
       const reqsSnap = await adminDb.collection("connectionRequests").get();
       const accepted = reqsSnap.docs.some((d) => {
         const r = d.data() as any;
@@ -112,296 +115,167 @@ export async function POST(req: Request) {
       subjectUserId = targetUserId;
     }
 
-    // Gather optional user context (profile + tiny tree + connections summary)
-    let userContext = undefined as string | undefined;
+    // Gather user context with PARALLEL queries and REDUCED data
+    let userContext: string | undefined;
     if (subjectUserId) {
       try {
-        const [profileSnap, treeSnap] = await Promise.all([
+        // Run ALL database queries in parallel
+        const [profileSnap, treeSnap, kinship, messages] = await Promise.all([
           adminDb.collection("users").doc(subjectUserId).get(),
           adminDb.collection("familyTrees").doc(subjectUserId).get(),
+          buildKinshipFacts(subjectUserId),
+          getRecentMessages(subjectUserId),
         ]);
+
         const profile = profileSnap.exists ? profileSnap.data() : undefined;
         const tree = treeSnap.exists ? treeSnap.data() : undefined;
 
-        let connectionsSummary: any = undefined;
-        if (scope === "connected" || scope === "global") {
-          const reqsSnap2 = await adminDb
-            .collection("connectionRequests")
-            .get();
-          const reqs2 = reqsSnap2.docs
-            .map((d) => ({ id: d.id, ...(d.data() as any) }))
-            .filter(
-              (r) =>
-                r.fromUserId === subjectUserId || r.toUserId === subjectUserId
-            );
-          const pending = reqs2.filter((r) => r.status === "pending").length;
-          const accepted = reqs2.filter((r) => r.status === "accepted").length;
-          connectionsSummary = { pending, accepted };
-        }
-
-        const p: any = profile || undefined;
-        // Include a lightweight messages summary for personalization
-        let messagesSummary: any[] | undefined = undefined;
-        try {
-          const msgSnap = await adminDb.collection("messages").get();
-          const relevant = msgSnap.docs
-            .map((d) => ({ id: d.id, ...(d.data() as any) }))
-            .filter(
-              (m) =>
-                m.senderId === subjectUserId || m.receiverId === subjectUserId
-            )
-            .sort((a, b) =>
-              (b.createdAt || "").localeCompare(a.createdAt || "")
-            )
-            .slice(0, 20);
-          messagesSummary = relevant.map((m) => ({
-            peerId: m.senderId === subjectUserId ? m.receiverId : m.senderId,
-            direction: m.senderId === subjectUserId ? "out" : "in",
-            text: typeof m.text === "string" ? m.text.slice(0, 500) : "",
-            createdAt: m.createdAt,
-          }));
-        } catch {}
-        let kinship = subjectUserId
-          ? await buildKinshipFacts(subjectUserId)
-          : [];
-        // Prepend head-of-family fact when available
-        try {
-          const headSnap = await adminDb
-            .collection("familyTrees")
-            .doc(subjectUserId!)
-            .get();
-          if (headSnap.exists) {
-            const t = headSnap.data() as any;
-            const head = (t.members || []).find((m: any) => m.isHeadOfFamily);
-            if (head?.fullName) {
-              kinship = [
-                `${head.fullName} is the head of the family.`,
-                ...kinship,
-              ];
-            }
-          }
-        } catch {}
-        const relationTypes = [
-          "parent",
-          "spouse",
-          "adoptive",
-          "step",
-          "big_sister",
-          "little_sister",
-          "big_brother",
-          "little_brother",
-          "aunt",
-          "uncle",
-          "cousin_big",
-          "cousin_little",
-          "guardian",
-          "other",
-        ];
+        // Build minimal context - only essential fields
         const ctx = {
-          scope: scope || "own",
-          subjectUserId,
-          profile: p
+          profile: profile
             ? {
-                // Legacy/basic
-                fullName: p.fullName,
-                birthPlace: p.birthPlace,
-                clanOrCulturalInfo: p.clanOrCulturalInfo,
-                relativesNames: p.relativesNames,
-                // Personal
-                firstName: p.firstName,
-                middleName: p.middleName,
-                lastName: p.lastName,
-                preferredName: p.preferredName,
-                birthDate: p.birthDate,
-                gender: p.gender,
-                nationality: p.nationality,
-                nid: p.nid,
-                maritalStatus: p.maritalStatus,
-                phoneNumber: p.phoneNumber,
-                email: p.email,
-                province: p.province,
-                district: p.district,
-                sector: p.sector,
-                cell: p.cell,
-                village: p.village,
-                preferredLanguage: p.preferredLanguage,
-                profilePicture: p.profilePicture,
-                // Residence
-                residenceProvince: p.residenceProvince,
-                residenceDistrict: p.residenceDistrict,
-                residenceSector: p.residenceSector,
-                residenceCell: p.residenceCell,
-                residenceVillage: p.residenceVillage,
-                streetName: p.streetName,
-                // Social & relations
-                socialMedias: p.socialMedias,
-                location: p.location,
-                spouseName: p.spouseName,
-                // Education & Work (truncated for safety)
-                education: Array.isArray(p.education)
-                  ? p.education.slice(0, 10)
-                  : undefined,
-                work: Array.isArray(p.work) ? p.work.slice(0, 10) : undefined,
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+                birthDate: profile.birthDate,
+                birthPlace: profile.birthPlace,
               }
             : undefined,
           tree: tree
             ? {
-                members: Array.isArray((tree as any).members)
-                  ? (tree as any).members.slice(0, 30)
+                members: Array.isArray(tree.members)
+                  ? tree.members.slice(0, 15)
                   : [],
-                edges: Array.isArray((tree as any).edges)
-                  ? (tree as any).edges.slice(0, 60)
-                  : [],
+                edges: Array.isArray(tree.edges) ? tree.edges.slice(0, 30) : [],
               }
             : undefined,
-          connections: connectionsSummary,
-          messages: messagesSummary,
-          kinship,
-          capabilities: {
-            relationTypes,
-            headOfFamily: true,
-            suggestApi: true,
-          },
+          kinship: kinship.slice(0, 10),
+          messages: messages.slice(0, 5),
         };
         userContext = JSON.stringify(ctx);
-      } catch {}
+      } catch (e) {
+        console.error("Context gathering failed:", e);
+        // Continue without context rather than failing
+      }
     }
 
-    // If OpenRouter key is configured, use OpenRouter first with timeout
+    // Try OpenRouter first (with reduced timeout)
     if (process.env.OPENROUTER_API_KEY) {
-      const systemPrompt =
-        "You are a helpful AI assistant specialized in genealogy and DNA analysis. When available, use the provided user context to personalize guidance, but never reveal raw data.";
-      const composedUser = userContext
-        ? `User Context (JSON): ${userContext}\n\nQuestion: ${query}`
-        : query;
-      const orController = new AbortController();
-      const orTimer = setTimeout(() => orController.abort(), 12000);
-      const orResp = await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-            // Identify the app per OpenRouter requirements to avoid 402/org issues
-            "HTTP-Referer":
-              process.env.NEXT_PUBLIC_APP_URL || "http://localhost",
-            "X-Title": process.env.OPENROUTER_APP_TITLE || "eSANO",
-          },
-          body: JSON.stringify({
-            // Default to a widely available model; allow override via env
-            model:
-              process.env.OPENROUTER_MODEL ||
-              process.env.NEXT_PUBLIC_OPENROUTER_MODEL ||
-              "openrouter/auto",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: composedUser },
-            ],
-            max_tokens: 512,
-            temperature: 0.2,
-          }),
-          signal: orController.signal,
-        }
-      );
-      clearTimeout(orTimer);
-      if (!orResp.ok) {
-        let detailText = "";
-        try {
-          detailText = await orResp.text();
-        } catch {}
-        // Fallback to DeepSeek if configured, then Gemini
-        if (process.env.DEEPSEEK_API_KEY) {
-          // fall through to DeepSeek block below
-        } else if (process.env.GEMINI_API_KEY) {
-          const result = await withRetry(() =>
-            askGenealogyAssistant({ query, userContext })
-          );
-          return NextResponse.json({ response: result.response });
-        } else {
-          return NextResponse.json(
-            { error: "Assistant unavailable", detail: detailText },
-            { status: 500 }
-          );
-        }
-      } else {
-        let orJson: any = null;
-        try {
-          orJson = await orResp.json();
-        } catch {
-          return NextResponse.json({
-            response:
-              "Assistant responded, but the format was unexpected. Please retry.",
-          });
-        }
-        const content = orJson?.choices?.[0]?.message?.content ?? "";
-        return NextResponse.json({ response: content || "" });
-      }
-    }
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7000); // 7s timeout
 
-    // If DeepSeek key is configured, use DeepSeek API directly
-    if (process.env.DEEPSEEK_API_KEY) {
-      const systemPrompt =
-        "You are a helpful AI assistant specialized in genealogy and DNA analysis. When available, use the provided user context to personalize guidance, but never reveal raw data.";
-      const composedUser = userContext
-        ? `User Context (JSON): ${userContext}\n\nQuestion: ${query}`
-        : query;
-      const dsResp = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: composedUser },
-          ],
-        }),
-      });
-      if (!dsResp.ok) {
-        let detailText = await dsResp.text();
-        try {
-          const maybeJson = JSON.parse(detailText);
-          const msg = maybeJson?.error?.message as string | undefined;
-          const code = maybeJson?.error?.code as string | undefined;
-          const isInsufficient =
-            (code && code.toLowerCase().includes("insufficient")) ||
-            (msg && msg.toLowerCase().includes("insufficient"));
-          if (isInsufficient && process.env.GEMINI_API_KEY) {
-            // Fallback to Gemini via Genkit
-            const result = await withRetry(() =>
-              askGenealogyAssistant({ query, userContext })
-            );
-            return NextResponse.json({ response: result.response });
+        const response = await fetch(
+          "https://openrouter.ai/api/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              "Content-Type": "application/json",
+              "HTTP-Referer":
+                process.env.NEXT_PUBLIC_APP_URL || "http://localhost",
+              "X-Title": "eSANO",
+            },
+            body: JSON.stringify({
+              model: process.env.OPENROUTER_MODEL || "openrouter/auto",
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are a helpful genealogy AI assistant. Be concise.",
+                },
+                {
+                  role: "user",
+                  content: userContext
+                    ? `Context: ${userContext}\n\nQ: ${query}`
+                    : query,
+                },
+              ],
+              max_tokens: 250, // Reduced for faster response
+              temperature: 0.3,
+            }),
+            signal: controller.signal,
           }
-        } catch {}
-        return NextResponse.json(
-          { error: "Assistant unavailable", detail: detailText },
-          { status: 500 }
         );
+
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data?.choices?.[0]?.message?.content || "";
+          if (content) {
+            return NextResponse.json({ response: content });
+          }
+        }
+      } catch (e: any) {
+        console.error("OpenRouter failed:", e.message);
+        // Fall through to next provider
       }
-      const dsJson: any = await dsResp.json();
-      const content = dsJson?.choices?.[0]?.message?.content ?? "";
-      return NextResponse.json({ response: content || "" });
     }
 
-    // Otherwise, require Gemini and use Genkit flow
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json(
-        { error: "GEMINI_API_KEY not set on server" },
-        { status: 500 }
-      );
+    // Try DeepSeek
+    if (process.env.DEEPSEEK_API_KEY) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7000);
+
+        const response = await fetch(
+          "https://api.deepseek.com/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "deepseek-chat",
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are a helpful genealogy AI assistant. Be concise.",
+                },
+                {
+                  role: "user",
+                  content: userContext
+                    ? `Context: ${userContext}\n\nQ: ${query}`
+                    : query,
+                },
+              ],
+              max_tokens: 250,
+            }),
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data?.choices?.[0]?.message?.content || "";
+          if (content) {
+            return NextResponse.json({ response: content });
+          }
+        }
+      } catch (e: any) {
+        console.error("DeepSeek failed:", e.message);
+        // Fall through to Gemini
+      }
     }
 
-    const result = await withRetry(() =>
-      askGenealogyAssistant({ query, userContext })
-    );
-    return NextResponse.json({ response: result.response });
-  } catch (e: any) {
+    // Fallback to Gemini (no timeout wrapper - let it use its own)
+    if (process.env.GEMINI_API_KEY) {
+      const result = await askGenealogyAssistant({ query, userContext });
+      return NextResponse.json({ response: result.response });
+    }
+
     return NextResponse.json(
-      { error: "Assistant unavailable", detail: e?.message ?? "" },
+      { error: "No AI provider configured" },
+      { status: 500 }
+    );
+  } catch (e: any) {
+    console.error("API error:", e);
+    return NextResponse.json(
+      { error: "Service error", detail: e?.message ?? "" },
       { status: 500 }
     );
   }
