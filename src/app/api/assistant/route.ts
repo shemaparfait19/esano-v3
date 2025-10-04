@@ -88,12 +88,16 @@ export async function POST(req: Request) {
       const openRouterKey = process.env.OPENROUTER_API_KEY
         ? `${process.env.OPENROUTER_API_KEY.slice(0, 10)}...`
         : "Not set";
+      const geminiKey = process.env.GEMINI_API_KEY
+        ? `${process.env.GEMINI_API_KEY.slice(0, 10)}...`
+        : "Not set";
       return NextResponse.json({
         ok: true,
         hasGemini,
         hasDeepseek,
         hasOpenRouter,
         openRouterKey,
+        geminiKey,
         timestamp: new Date().toISOString(),
       });
     }
@@ -150,7 +154,7 @@ export async function POST(req: Request) {
         console.log("Attempting Gemini direct API with query:", query);
 
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
           {
             method: "POST",
             headers: {
