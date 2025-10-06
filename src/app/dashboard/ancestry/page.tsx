@@ -13,7 +13,7 @@ type PageData = {
   id: string;
   title: string;
   subtitle?: string;
-  photoUrl?: string;
+  media?: { url: string; type: "photo" | "video" };
   content: string[]; // paragraphs
 };
 
@@ -111,6 +111,34 @@ export default function AncestryBookPage() {
         m.originRegion || (m.location ? `Lives in ${m.location}` : undefined);
       const subtitle = relations.get(m.id) || origin;
       const content: string[] = [];
+      // Select featured media
+      let media: PageData["media"] | undefined;
+      const featured = (m as any)?.customFields?.featuredMediaUrl as
+        | string
+        | undefined;
+      if (featured) {
+        media = {
+          url: featured,
+          type: featured.includes("video") ? "video" : "photo",
+        };
+      } else if (m.avatarUrl) {
+        media = { url: m.avatarUrl, type: "photo" };
+      } else if (Array.isArray(m.timeline)) {
+        const withUrl = m.timeline
+          .slice()
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .find((t) => !!t.url);
+        if (withUrl?.url) {
+          const type = withUrl.type === "video" ? "video" : "photo";
+          media = { url: withUrl.url, type };
+        }
+      }
+      if (!media && Array.isArray(m.mediaUrls) && m.mediaUrls.length > 0) {
+        media = {
+          url: m.mediaUrls[0],
+          type: (m.mediaUrls[0].includes("video") ? "video" : "photo") as any,
+        };
+      }
       if (m.birthDate)
         content.push(
           `Born on ${new Date(m.birthDate).toDateString()}${
@@ -143,7 +171,7 @@ export default function AncestryBookPage() {
       if (m.notes) content.push(m.notes);
       if (content.length === 0)
         content.push("No further details recorded yet.");
-      return { id: m.id, title, subtitle, photoUrl: m.avatarUrl, content };
+      return { id: m.id, title, subtitle, media, content };
     };
     // Simple order: ancestors first (parents/grandparents), then others
     const scored = members.map((m) => ({
@@ -244,12 +272,19 @@ export default function AncestryBookPage() {
                       {page.subtitle}
                     </div>
                   )}
-                  {page?.photoUrl && (
+                  {page?.media?.url && page.media.type === "photo" && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       alt={page.title}
-                      src={page.photoUrl}
+                      src={page.media.url}
                       className="w-full h-60 object-cover rounded-md border"
+                    />
+                  )}
+                  {page?.media?.url && page.media.type === "video" && (
+                    <video
+                      src={page.media.url}
+                      className="w-full h-60 rounded-md border"
+                      controls
                     />
                   )}
                 </div>
