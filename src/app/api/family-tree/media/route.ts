@@ -24,6 +24,13 @@ export async function POST(request: NextRequest) {
     // In a real app, upload to Cloud Storage/S3 and get a URL.
     // For now, store a data URL (small files only) for demo purposes.
     const arrayBuffer = await file.arrayBuffer();
+    const MAX_BYTES = 2 * 1024 * 1024; // 2 MB limit for demo
+    if (arrayBuffer.byteLength > MAX_BYTES) {
+      return NextResponse.json(
+        { error: "File too large. Max 2 MB for now. Try a shorter clip." },
+        { status: 413 }
+      );
+    }
     const base64 = Buffer.from(arrayBuffer).toString("base64");
     const dataUrl = `data:${file.type};base64,${base64}`;
 
