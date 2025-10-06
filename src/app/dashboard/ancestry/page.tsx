@@ -8,7 +8,7 @@ import type { FamilyTree, FamilyEdge as AppEdge } from "@/types/family-tree";
 import type { FamilyMember as AppMember } from "@/types/family-tree";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, BookOpen, Home } from "lucide-react";
 
 type PageData = {
   id: string;
@@ -88,6 +88,7 @@ export default function AncestryBookPage() {
   const [featuredMedia, setFeaturedMedia] = useState<
     Map<string, { url: string; type: "photo" | "video" }>
   >(new Map());
+  const [isBookOpen, setIsBookOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -122,7 +123,6 @@ export default function AncestryBookPage() {
         | string
         | undefined;
 
-      // Check if user has selected custom featured media
       const userSelected = featuredMedia.get(m.id);
       if (userSelected) {
         media = userSelected;
@@ -148,7 +148,6 @@ export default function AncestryBookPage() {
         media = { url: m.mediaUrls[0], type: firstType };
       }
 
-      // Build media list
       const seen = new Set<string>();
       if (media) {
         mediaList.push(media);
@@ -239,7 +238,7 @@ export default function AncestryBookPage() {
       subtitle: "A family storybook",
       content: [
         "Turn the pages to explore detailed stories about your relatives.",
-        "Entries are generated from your Family Tree data and will become richer as you add more details.",
+        "Entries are generated from your family tree data and will become richer as you add more details.",
       ],
     };
     return [intro, ...ordered.map(toPage)];
@@ -276,30 +275,59 @@ export default function AncestryBookPage() {
     });
   }
 
+  function goToFirstPage() {
+    setPageIndex(0);
+  }
+
   const page = pages[pageIndex];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 py-8 px-4">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 py-8 px-4 relative overflow-hidden">
+      {/* Ambient background texture */}
+      <div
+        className="absolute inset-0 opacity-10"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+        }}
+      ></div>
+
+      <div className="max-w-7xl mx-auto space-y-6 relative z-10">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="font-serif text-4xl font-bold text-amber-900 md:text-5xl tracking-tight">
-            Family Ancestry Book
-          </h1>
-          <div className="text-sm font-serif text-amber-800 bg-amber-100 px-4 py-2 rounded-full border border-amber-300">
-            Page {pageIndex + 1} of {pages.length || 1}
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-8 w-8 text-amber-400" />
+            <h1 className="font-serif text-3xl md:text-4xl font-bold text-amber-100 tracking-wide">
+              Family Ancestry Book
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={goToFirstPage}
+              className="text-amber-200 hover:text-amber-100 hover:bg-slate-700/50"
+            >
+              <Home className="h-4 w-4 mr-2" />
+              Cover
+            </Button>
+            <div className="text-xs font-serif text-amber-200 bg-slate-700/50 px-3 py-1.5 rounded-md border border-slate-600">
+              {pageIndex + 1} / {pages.length || 1}
+            </div>
           </div>
         </div>
 
+        {/* Book Container */}
         <div className="flex items-center justify-center relative">
           <div className="relative w-full max-w-6xl">
+            {/* Navigation Buttons */}
             <Button
               variant="ghost"
               size="lg"
               onClick={prevPage}
               disabled={pageIndex === 0 || anim !== "none"}
-              className="absolute -left-16 top-1/2 -translate-y-1/2 z-20 h-16 w-16 rounded-full bg-amber-100 hover:bg-amber-200 border-2 border-amber-300 shadow-lg disabled:opacity-30"
+              className="absolute -left-14 top-1/2 -translate-y-1/2 z-20 h-12 w-12 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-500 shadow-xl disabled:opacity-20 transition-all"
             >
-              <ChevronLeft className="h-8 w-8 text-amber-900" />
+              <ChevronLeft className="h-6 w-6 text-amber-300" />
             </Button>
 
             <Button
@@ -307,69 +335,84 @@ export default function AncestryBookPage() {
               size="lg"
               onClick={nextPage}
               disabled={pageIndex >= pages.length - 1 || anim !== "none"}
-              className="absolute -right-16 top-1/2 -translate-y-1/2 z-20 h-16 w-16 rounded-full bg-amber-100 hover:bg-amber-200 border-2 border-amber-300 shadow-lg disabled:opacity-30"
+              className="absolute -right-14 top-1/2 -translate-y-1/2 z-20 h-12 w-12 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-500 shadow-xl disabled:opacity-20 transition-all"
             >
-              <ChevronRight className="h-8 w-8 text-amber-900" />
+              <ChevronRight className="h-6 w-6 text-amber-300" />
             </Button>
 
-            <div className="relative" style={{ perspective: "2000px" }}>
+            {/* Book */}
+            <div className="relative" style={{ perspective: "2500px" }}>
+              {/* Book shadow */}
+              <div className="absolute inset-0 bg-black/40 blur-2xl translate-y-6 scale-95"></div>
+
               <Card
-                className={`overflow-hidden shadow-2xl border-4 border-amber-900/20 transition-all duration-400 ease-out
+                className={`overflow-hidden shadow-2xl transition-all duration-400 ease-out relative
                   ${anim === "next" ? "animate-page-turn-next" : ""}
                   ${anim === "prev" ? "animate-page-turn-prev" : ""}
                 `}
                 style={{
                   background:
-                    "linear-gradient(to bottom right, #fefce8, #fef3c7, #fde68a)",
+                    "linear-gradient(to right, #fef9e7 0%, #fef5e7 48%, #2c2c2c 48.5%, #1a1a1a 49.5%, #fef5e7 50%, #fef9e7 100%)",
                   transform:
                     anim === "next"
-                      ? "rotateY(-15deg)"
+                      ? "rotateY(-8deg)"
                       : anim === "prev"
-                      ? "rotateY(15deg)"
+                      ? "rotateY(8deg)"
                       : "rotateY(0deg)",
+                  borderRadius: "4px",
+                  border: "2px solid #8b4513",
+                  boxShadow:
+                    "0 25px 50px -12px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(139, 69, 19, 0.1)",
                 }}
               >
-                <div className="grid md:grid-cols-2 gap-0 min-h-[600px]">
-                  {/* Left page - Media */}
-                  <div className="p-10 flex flex-col gap-6 bg-gradient-to-br from-amber-50/50 to-orange-50/30 border-r-2 border-amber-900/10">
-                    <div className="space-y-3">
-                      <h2 className="text-4xl font-serif font-bold text-amber-900 leading-tight">
+                <div className="grid md:grid-cols-2 gap-0 min-h-[650px]">
+                  {/* Left Page */}
+                  <div className="p-8 md:p-10 flex flex-col gap-5 bg-gradient-to-br from-amber-50/95 to-yellow-50/90 border-r-2 border-amber-900/20 relative">
+                    {/* Page texture overlay */}
+                    <div
+                      className="absolute inset-0 opacity-5"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E")`,
+                      }}
+                    ></div>
+
+                    <div className="space-y-2 relative z-10">
+                      <h2 className="text-3xl font-serif font-bold text-slate-800 leading-snug">
                         {page?.title || "Loading..."}
                       </h2>
                       {page?.subtitle && (
-                        <p className="text-lg font-serif italic text-amber-700 border-l-4 border-amber-400 pl-4">
+                        <p className="text-base font-serif italic text-amber-700 border-l-2 border-amber-500 pl-3">
                           {page.subtitle}
                         </p>
                       )}
                     </div>
 
                     {page?.media?.url && page.media.type === "photo" && (
-                      <div className="flex-1 flex items-center justify-center">
+                      <div className="flex-1 flex items-center justify-center relative z-10">
                         <div className="relative w-full max-w-md">
-                          <div className="absolute inset-0 bg-amber-900/5 rotate-1"></div>
                           <img
                             alt={page.title}
                             src={page.media.url}
-                            className="relative w-full h-80 object-cover rounded shadow-xl border-8 border-white"
+                            className="w-full h-72 object-cover rounded-sm shadow-lg border-4 border-white/80"
                           />
                         </div>
                       </div>
                     )}
 
                     {page?.media?.url && page.media.type === "video" && (
-                      <div className="flex-1 flex items-center justify-center">
+                      <div className="flex-1 flex items-center justify-center relative z-10">
                         <video
                           src={page.media.url}
-                          className="w-full max-w-md h-80 rounded shadow-xl border-8 border-white"
+                          className="w-full max-w-md h-72 rounded-sm shadow-lg border-4 border-white/80"
                           controls
                         />
                       </div>
                     )}
 
                     {!page?.media?.url && (
-                      <div className="flex-1 flex items-center justify-center">
-                        <div className="w-full max-w-md h-80 bg-amber-100/50 rounded border-8 border-white shadow-xl flex items-center justify-center">
-                          <p className="text-amber-600 font-serif italic">
+                      <div className="flex-1 flex items-center justify-center relative z-10">
+                        <div className="w-full max-w-md h-72 bg-amber-100/60 rounded-sm border-4 border-white/80 shadow-lg flex items-center justify-center">
+                          <p className="text-amber-600/70 font-serif italic text-sm">
                             No photo available
                           </p>
                         </div>
@@ -377,27 +420,27 @@ export default function AncestryBookPage() {
                     )}
 
                     {page?.mediaList && page.mediaList.length > 1 && (
-                      <div className="mt-auto">
-                        <p className="text-xs font-serif text-amber-700 mb-2 uppercase tracking-wider">
-                          Photo Gallery
+                      <div className="mt-auto relative z-10">
+                        <p className="text-[10px] font-serif text-amber-700 mb-2 uppercase tracking-wide">
+                          Gallery
                         </p>
-                        <div className="grid grid-cols-6 gap-2">
+                        <div className="grid grid-cols-6 gap-1.5">
                           {page.mediaList.map((m, i) => (
                             <button
                               key={i}
                               onClick={() => handleMediaClick(page.id, m)}
-                              className="border-4 border-white rounded overflow-hidden hover:border-amber-400 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
-                              title={`Click to view ${m.type}`}
+                              className="border-2 border-white rounded-sm overflow-hidden hover:border-amber-400 transition-all shadow hover:shadow-md transform hover:scale-110"
+                              title={`View ${m.type}`}
                             >
                               {m.type === "photo" ? (
                                 <img
                                   src={m.url}
                                   alt=""
-                                  className="w-full h-16 object-cover"
+                                  className="w-full h-14 object-cover"
                                 />
                               ) : (
-                                <div className="w-full h-16 bg-amber-900 text-white text-[10px] flex items-center justify-center font-serif">
-                                  ▶ Video
+                                <div className="w-full h-14 bg-slate-700 text-white text-[9px] flex items-center justify-center font-serif">
+                                  ▶
                                 </div>
                               )}
                             </button>
@@ -407,39 +450,48 @@ export default function AncestryBookPage() {
                     )}
                   </div>
 
-                  {/* Right page - Text content */}
-                  <div className="p-10 space-y-6 bg-gradient-to-br from-orange-50/30 to-amber-50/50 flex flex-col">
-                    <div className="flex-1 space-y-5">
+                  {/* Right Page */}
+                  <div className="p-8 md:p-10 space-y-5 bg-gradient-to-br from-yellow-50/90 to-amber-50/95 flex flex-col relative">
+                    {/* Page texture overlay */}
+                    <div
+                      className="absolute inset-0 opacity-5"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E")`,
+                      }}
+                    ></div>
+
+                    <div className="flex-1 space-y-4 relative z-10">
                       {(page?.content ?? []).map((p, idx) => (
                         <p
                           key={idx}
-                          className="font-serif text-base leading-relaxed text-amber-950/90 first-letter:text-5xl first-letter:font-bold first-letter:text-amber-900 first-letter:float-left first-letter:mr-2 first-letter:mt-1"
+                          className="font-serif text-sm leading-relaxed text-slate-800/95 indent-6"
                         >
                           {p}
                         </p>
                       ))}
                     </div>
 
-                    {/* Decorative page number */}
-                    <div className="text-center text-sm font-serif text-amber-600 pt-4 border-t border-amber-300/50">
-                      ~ {pageIndex + 1} ~
+                    {/* Page number */}
+                    <div className="text-center text-xs font-serif text-amber-700/70 pt-4 border-t border-amber-300/30 relative z-10">
+                      {pageIndex + 1}
                     </div>
                   </div>
                 </div>
               </Card>
 
-              {/* Book spine shadow effect */}
-              <div className="absolute left-1/2 top-0 bottom-0 w-2 bg-gradient-to-r from-amber-900/20 via-amber-900/10 to-transparent -translate-x-1/2 pointer-events-none"></div>
+              {/* Book spine effect */}
+              <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-gradient-to-r from-amber-900/60 via-amber-950/80 to-amber-900/60 -translate-x-1/2 pointer-events-none shadow-lg"></div>
             </div>
           </div>
         </div>
 
         {pages.length === 0 && (
           <div className="text-center">
-            <Card className="max-w-2xl mx-auto p-12 bg-amber-50 border-4 border-amber-300">
-              <p className="font-serif text-xl text-amber-800 leading-relaxed">
+            <Card className="max-w-2xl mx-auto p-10 bg-amber-50 border-2 border-amber-800/30 shadow-xl">
+              <BookOpen className="h-16 w-16 text-amber-700/50 mx-auto mb-4" />
+              <p className="font-serif text-lg text-amber-800 leading-relaxed">
                 Your ancestry book awaits its first story. Add relatives in your
-                Family Tree to begin writing your family's legacy.
+                family tree to begin writing your family's legacy.
               </p>
             </Card>
           </div>
@@ -452,7 +504,7 @@ export default function AncestryBookPage() {
             transform: rotateY(0deg);
           }
           50% {
-            transform: rotateY(-15deg);
+            transform: rotateY(-8deg);
           }
           100% {
             transform: rotateY(0deg);
@@ -463,7 +515,7 @@ export default function AncestryBookPage() {
             transform: rotateY(0deg);
           }
           50% {
-            transform: rotateY(15deg);
+            transform: rotateY(8deg);
           }
           100% {
             transform: rotateY(0deg);
