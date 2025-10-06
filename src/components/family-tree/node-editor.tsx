@@ -148,6 +148,21 @@ export function NodeEditor({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* XP / Level */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Level</Label>
+            <div className="text-sm text-muted-foreground mt-1">
+              {member.level ?? 1}
+            </div>
+          </div>
+          <div>
+            <Label>XP</Label>
+            <div className="text-sm text-muted-foreground mt-1">
+              {member.xp ?? 0}
+            </div>
+          </div>
+        </div>
         {/* Name Fields */}
         <div className="grid grid-cols-2 gap-3">
           <div>

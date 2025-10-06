@@ -334,6 +334,32 @@ export function TreeCanvas({
           }`;
           ctx.fillText(dates, x + w / 2, y + h / 2 + 12);
         }
+
+        // XP/Level badge (bottom-right)
+        if (typeof member.xp === "number" || typeof member.level === "number") {
+          const badgeW = 72;
+          const badgeH = 22;
+          const bx = x + w - badgeW - 8;
+          const by = y + h - badgeH - 8;
+          ctx.save();
+          ctx.fillStyle =
+            isSelected || isHovered ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.15)";
+          ctx.beginPath();
+          ctx.roundRect(bx, by, badgeW, badgeH, 8);
+          ctx.fill();
+          ctx.font = "12px system-ui, -apple-system, sans-serif";
+          ctx.fillStyle = "#ffffff";
+          const lvl = typeof member.level === "number" ? member.level : 1;
+          const xp = typeof member.xp === "number" ? member.xp : 0;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(
+            `Lvl ${lvl} · ${xp} XP`,
+            bx + badgeW / 2,
+            by + badgeH / 2
+          );
+          ctx.restore();
+        }
       }
 
       ctx.restore();

@@ -250,6 +250,45 @@ export default function FamilyTreePage() {
     setDirty(true);
   };
 
+  // Smart relationship suggestions: when selecting a parent-child, suggest missing counterpart
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  useEffect(() => {
+    if (
+      !newRelationship.fromId ||
+      !newRelationship.toId ||
+      !newRelationship.type
+    ) {
+      setSuggestion(null);
+      return;
+    }
+    if (newRelationship.type === "parent") {
+      // If parent edge exists one-way, suggest spouse of that parent as other parent
+      const parentId = newRelationship.fromId;
+      const childId = newRelationship.toId;
+      const hasOtherParent = edges.some(
+        (e) =>
+          e.type === "parent" && e.toId === childId && e.fromId !== parentId
+      );
+      if (!hasOtherParent) {
+        const possibleSpouses = edges
+          .filter(
+            (e) =>
+              e.type === "spouse" &&
+              (e.fromId === parentId || e.toId === parentId)
+          )
+          .map((e) => (e.fromId === parentId ? e.toId : e.fromId));
+        if (possibleSpouses.length > 0) {
+          const name =
+            members.find((m) => m.id === possibleSpouses[0])?.fullName ||
+            "their spouse";
+          setSuggestion(`Also add ${name} as a parent of this child?`);
+          return;
+        }
+      }
+    }
+    setSuggestion(null);
+  }, [newRelationship, edges, members]);
+
   const handleNodeClick = (nodeId: string) => {
     setSelectedNode(nodeId);
   };
@@ -619,6 +658,11 @@ export default function FamilyTreePage() {
                 Cancel
               </Button>
             </div>
+            {suggestion && (
+              <div className="text-xs text-muted-foreground mt-2">
+                {suggestion}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
