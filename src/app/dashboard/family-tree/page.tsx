@@ -341,14 +341,25 @@ export default function FamilyTreePage() {
 
   useEffect(() => {
     if (!user?.uid) return;
-    const presCol = collection(db, "familyTrees", user.uid, "presence");
-    const unsub = onSnapshot(presCol, (snap) => {
-      const items = snap.docs
-        .map((d) => ({ id: d.id, ...(d.data() as any) }))
-        .filter((p) => p.id !== user.uid);
-      setPresence(items);
-    });
-    return () => unsub();
+    try {
+      const presCol = collection(db, "familyTrees", user.uid, "presence");
+      const unsub = onSnapshot(
+        presCol,
+        (snap) => {
+          const items = snap.docs
+            .map((d) => ({ id: d.id, ...(d.data() as any) }))
+            .filter((p) => p.id !== user.uid);
+          setPresence(items);
+        },
+        (err) => {
+          // Silently ignore permission issues
+          console.warn("presence onSnapshot error", err?.code || err?.message);
+        }
+      );
+      return () => unsub();
+    } catch (e) {
+      // Ignore when rules block presence
+    }
   }, [user?.uid]);
 
   // Track cursor and write to presence (throttled)

@@ -567,7 +567,7 @@ export function TreeCanvas({
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
+    // Avoid calling preventDefault in passive listeners; only compute
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 

@@ -4,11 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import type {
-  FamilyTree,
-  FamilyTreeEdge,
-  FamilyTreeMember,
-} from "@/types/firestore";
+import type { FamilyTree, FamilyEdge as AppEdge } from "@/types/family-tree";
+import type { FamilyMember as AppMember } from "@/types/family-tree";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -21,20 +18,17 @@ type PageData = {
 };
 
 function inferRelations(
-  members: FamilyTreeMember[],
-  edges: FamilyTreeEdge[],
+  members: AppMember[],
+  edges: AppEdge[],
   selfId?: string
 ) {
   // Build quick maps for basic relations to compute generations relative to self
   const parentsOf = new Map<string, string[]>();
   const childrenOf = new Map<string, string[]>();
   edges.forEach((e) => {
-    if (e.relation === "parent") {
+    if (e.type === "parent") {
       parentsOf.set(e.toId, [...(parentsOf.get(e.toId) ?? []), e.fromId]);
       childrenOf.set(e.fromId, [...(childrenOf.get(e.fromId) ?? []), e.toId]);
-    } else if (e.relation === "child") {
-      parentsOf.set(e.fromId, [...(parentsOf.get(e.fromId) ?? []), e.toId]);
-      childrenOf.set(e.toId, [...(childrenOf.get(e.toId) ?? []), e.fromId]);
     }
   });
   const label = new Map<string, string>();
@@ -96,7 +90,7 @@ export default function AncestryBookPage() {
     async function load() {
       if (!user) return;
       const snap = await getDoc(doc(db, "familyTrees", user.uid));
-      if (!ignore && snap.exists()) setTree(snap.data() as FamilyTree);
+      if (!ignore && snap.exists()) setTree(snap.data() as any as FamilyTree);
     }
     load();
     return () => {
@@ -106,21 +100,21 @@ export default function AncestryBookPage() {
 
   const pages: PageData[] = useMemo(() => {
     if (!tree) return [];
-    const members = tree.members;
-    const edges = tree.edges;
+    const members = tree.members as AppMember[];
+    const edges = tree.edges as AppEdge[];
     const relations = inferRelations(members, edges, user?.uid);
-    const toPage = (m: FamilyTreeMember): PageData => {
+    const toPage = (m: AppMember): PageData => {
       const isDeceased =
         m.isDeceased || (!!m.deathDate && m.deathDate.length > 0);
       const title = m.fullName;
-      const subtitle =
-        relations.get(m.id) ||
-        (m.birthPlace ? `From ${m.birthPlace}` : undefined);
+      const origin =
+        m.originRegion || (m.location ? `Lives in ${m.location}` : undefined);
+      const subtitle = relations.get(m.id) || origin;
       const content: string[] = [];
       if (m.birthDate)
         content.push(
           `Born on ${new Date(m.birthDate).toDateString()}${
-            m.birthPlace ? ` in ${m.birthPlace}` : ""
+            m.location ? ` in ${m.location}` : ""
           }.`
         );
       if (isDeceased)
@@ -129,11 +123,27 @@ export default function AncestryBookPage() {
             m.deathDate ? ` on ${new Date(m.deathDate).toDateString()}` : ""
           }.`
         );
-      if (m.occupation) content.push(`Occupation: ${m.occupation}.`);
+      if (m.ethnicity) content.push(`Ethnicity: ${m.ethnicity}.`);
+      if (Array.isArray(m.origins) && m.origins.length > 0)
+        content.push(`Origins: ${m.origins.join(", ")}.`);
+      if (Array.isArray(m.timeline) && m.timeline.length > 0)
+        content.push(
+          `Timeline entries: ${m.timeline
+            .slice()
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, 3)
+            .map(
+              (t) =>
+                `${new Date(t.date).toLocaleDateString()} - ${
+                  t.title || t.type
+                }`
+            )
+            .join("; ")}.`
+        );
       if (m.notes) content.push(m.notes);
       if (content.length === 0)
         content.push("No further details recorded yet.");
-      return { id: m.id, title, subtitle, photoUrl: m.photoUrl, content };
+      return { id: m.id, title, subtitle, photoUrl: m.avatarUrl, content };
     };
     // Simple order: ancestors first (parents/grandparents), then others
     const scored = members.map((m) => ({
