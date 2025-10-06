@@ -385,6 +385,43 @@ export default function FamilyTreePage() {
     });
   };
 
+  // Lineage highlight: when a node is selected, compute ancestors and descendants
+  useEffect(() => {
+    if (!selectedNode) {
+      useFamilyTreeStore
+        .getState()
+        .setRenderOptions({ highlightPath: undefined });
+      return;
+    }
+    const visited = new Set<string>();
+    const stack = [selectedNode];
+    // descendants
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      edges
+        .filter((e) => e.type === "parent" && e.fromId === cur)
+        .forEach((e) => stack.push(e.toId));
+    }
+    // ancestors
+    const up = [selectedNode];
+    while (up.length) {
+      const cur = up.pop()!;
+      edges
+        .filter((e) => e.type === "parent" && e.toId === cur)
+        .forEach((e) => {
+          if (!visited.has(e.fromId)) {
+            visited.add(e.fromId);
+            up.push(e.fromId);
+          }
+        });
+    }
+    useFamilyTreeStore
+      .getState()
+      .setRenderOptions({ highlightPath: Array.from(visited) });
+  }, [selectedNode, edges]);
+
   if (isLoading && !tree) {
     return (
       <div className="flex items-center justify-center h-96">

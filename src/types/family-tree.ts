@@ -8,6 +8,41 @@ export interface FamilyMember {
   isHeadOfFamily?: boolean;
   xp?: number;
   level?: number;
+  // Ancestry & origin
+  ethnicity?: string;
+  originRegion?: string; // e.g., "Bugesera, Eastern Province"
+  origins?: string[]; // multiple regions/tribes/clans
+  // Contacts
+  contacts?: {
+    phone?: string;
+    email?: string;
+    address?: string;
+    emergencyContact?: string;
+  };
+  // Timeline & milestones
+  timeline?: Array<{
+    id: string;
+    type: "photo" | "video" | "audio" | "event" | "note";
+    date: string; // ISO
+    title?: string;
+    url?: string;
+    description?: string;
+  }>;
+  voiceUrls?: string[];
+  milestones?: Array<{
+    id: string;
+    kind: "birth" | "wedding" | "graduation" | "funeral" | "other";
+    date: string;
+    title?: string;
+  }>;
+  // Budgeting entries (simple stub)
+  budgetEntries?: Array<{
+    id: string;
+    purpose: string;
+    amount: number;
+    date: string;
+    notes?: string;
+  }>;
   birthDate?: string;
   deathDate?: string;
   gender?: "male" | "female" | "other";

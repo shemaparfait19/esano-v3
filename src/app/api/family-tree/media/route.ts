@@ -10,6 +10,9 @@ export async function POST(request: NextRequest) {
     const userId = form.get("userId") as string;
     const memberId = form.get("memberId") as string;
     const file = form.get("file") as File | null;
+    const kind = (form.get("kind") as string) || "media"; // media | voice | timeline
+    const title = (form.get("title") as string) || undefined;
+    const date = (form.get("date") as string) || new Date().toISOString();
 
     if (!userId || !memberId || !file) {
       return NextResponse.json(
@@ -33,6 +36,30 @@ export async function POST(request: NextRequest) {
     const members = Array.isArray(tree.members) ? tree.members : [];
     const updatedMembers = members.map((m: any) => {
       if (m.id !== memberId) return m;
+      if (kind === "voice") {
+        const voice = Array.isArray(m.voiceUrls) ? m.voiceUrls : [];
+        return { ...m, voiceUrls: [...voice, dataUrl] };
+      }
+      if (kind === "timeline") {
+        const timeline = Array.isArray(m.timeline) ? m.timeline : [];
+        return {
+          ...m,
+          timeline: [
+            ...timeline,
+            {
+              id: `tl_${Date.now()}`,
+              type: file.type.startsWith("audio")
+                ? "audio"
+                : file.type.startsWith("video")
+                ? "video"
+                : "photo",
+              date,
+              title,
+              url: dataUrl,
+            },
+          ],
+        };
+      }
       const media = Array.isArray(m.mediaUrls) ? m.mediaUrls : [];
       return { ...m, mediaUrls: [...media, dataUrl] };
     });

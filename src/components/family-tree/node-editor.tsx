@@ -50,6 +50,9 @@ export function NodeEditor({
         location: member.location,
         notes: member.notes,
         tags: member.tags,
+        ethnicity: member.ethnicity,
+        originRegion: member.originRegion,
+        contacts: member.contacts,
       });
       setIsDirty(false);
     }
@@ -123,6 +126,39 @@ export function NodeEditor({
     }
   };
 
+  const handleUploadVoice = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!member) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingVoice(true);
+    setVoiceError(null);
+    try {
+      const form = new FormData();
+      form.append("userId", member.id.split("_")[0] || "");
+      form.append("memberId", member.id);
+      form.append("file", file);
+      form.append("kind", "voice");
+      const resp = await fetch("/api/family-tree/media", {
+        method: "POST",
+        body: form,
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error || "Upload failed");
+      const existing = Array.isArray(member.voiceUrls) ? member.voiceUrls : [];
+      const updated: FamilyMember = {
+        ...member,
+        voiceUrls: [...existing, data.url],
+        updatedAt: new Date().toISOString(),
+      };
+      updateMember(member.id, updated);
+      onSave(updated);
+    } catch (err: any) {
+      setVoiceError(err?.message || "Upload failed");
+    } finally {
+      setIsUploadingVoice(false);
+    }
+  };
+
   const handleDelete = () => {
     if (!member) return;
     onDelete(member.id);
@@ -144,6 +180,74 @@ export function NodeEditor({
           >
             <X className="h-4 w-4" />
           </Button>
+        </div>
+        {/* Ancestry */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="ethnicity">Ethnicity</Label>
+            <Input
+              id="ethnicity"
+              value={formData.ethnicity || ""}
+              onChange={(e) => handleInputChange("ethnicity", e.target.value)}
+              placeholder="e.g., Banyarwanda"
+            />
+          </div>
+          <div>
+            <Label htmlFor="originRegion">Origin Region</Label>
+            <Input
+              id="originRegion"
+              value={formData.originRegion || ""}
+              onChange={(e) =>
+                handleInputChange("originRegion", e.target.value)
+              }
+              placeholder="e.g., Bugesera, Eastern Province"
+            />
+          </div>
+        </div>
+        {/* Contacts */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              value={formData.contacts?.phone || ""}
+              onChange={(e) =>
+                handleInputChange("contacts", {
+                  ...formData.contacts,
+                  phone: e.target.value,
+                })
+              }
+              placeholder="07xx..."
+            />
+          </div>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              value={formData.contacts?.email || ""}
+              onChange={(e) =>
+                handleInputChange("contacts", {
+                  ...formData.contacts,
+                  email: e.target.value,
+                })
+              }
+              placeholder="email@example.com"
+            />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="address">Address</Label>
+          <Input
+            id="address"
+            value={formData.contacts?.address || ""}
+            onChange={(e) =>
+              handleInputChange("contacts", {
+                ...formData.contacts,
+                address: e.target.value,
+              })
+            }
+            placeholder="Street, City"
+          />
         </div>
       </CardHeader>
 
@@ -273,7 +377,7 @@ export function NodeEditor({
           <div className="mt-2 flex items-center gap-2">
             <input
               type="file"
-              accept="image/*,audio/*,video/*"
+              accept="image/*,video/*"
               onChange={handleUpload}
             />
             {isUploading && (
@@ -306,6 +410,33 @@ export function NodeEditor({
                     </a>
                   )}
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Voice memories */}
+        <div>
+          <Label>Voice Memories</Label>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="file"
+              accept="audio/*"
+              onChange={handleUploadVoice as any}
+            />
+            {isUploadingVoice && (
+              <span className="text-xs text-muted-foreground">
+                Uploading...
+              </span>
+            )}
+            {voiceError && (
+              <span className="text-xs text-destructive">{voiceError}</span>
+            )}
+          </div>
+          {Array.isArray(member.voiceUrls) && member.voiceUrls.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {member.voiceUrls.map((url, i) => (
+                <audio key={i} controls src={url} className="w-full" />
               ))}
             </div>
           )}
