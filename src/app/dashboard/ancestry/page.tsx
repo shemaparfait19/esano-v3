@@ -88,7 +88,6 @@ export default function AncestryBookPage() {
   const [featuredMedia, setFeaturedMedia] = useState<
     Map<string, { url: string; type: "photo" | "video" }>
   >(new Map());
-  const [isBookOpen, setIsBookOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -282,7 +281,7 @@ export default function AncestryBookPage() {
   const page = pages[pageIndex];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 py-8 px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 py-4 sm:py-8 px-2 sm:px-4 relative overflow-hidden">
       {/* Ambient background texture */}
       <div
         className="absolute inset-0 opacity-10"
@@ -291,26 +290,26 @@ export default function AncestryBookPage() {
         }}
       ></div>
 
-      <div className="max-w-7xl mx-auto space-y-6 relative z-10">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 relative z-10">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-8 w-8 text-amber-400" />
-            <h1 className="font-serif text-3xl md:text-4xl font-bold text-amber-100 tracking-wide">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <BookOpen className="h-6 w-6 sm:h-8 sm:w-8 text-amber-400" />
+            <h1 className="font-serif text-xl sm:text-3xl md:text-4xl font-bold text-amber-100 tracking-wide">
               Family Ancestry Book
             </h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
             <Button
               variant="ghost"
               size="sm"
               onClick={goToFirstPage}
-              className="text-amber-200 hover:text-amber-100 hover:bg-slate-700/50"
+              className="text-amber-200 hover:text-amber-100 hover:bg-slate-700/50 text-xs sm:text-sm"
             >
-              <Home className="h-4 w-4 mr-2" />
+              <Home className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               Cover
             </Button>
-            <div className="text-xs font-serif text-amber-200 bg-slate-700/50 px-3 py-1.5 rounded-md border border-slate-600">
+            <div className="text-xs font-serif text-amber-200 bg-slate-700/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-slate-600">
               {pageIndex + 1} / {pages.length || 1}
             </div>
           </div>
@@ -318,14 +317,14 @@ export default function AncestryBookPage() {
 
         {/* Book Container */}
         <div className="flex items-center justify-center relative">
-          <div className="relative w-full max-w-6xl">
-            {/* Navigation Buttons */}
+          <div className="relative w-full">
+            {/* Navigation Buttons - Desktop */}
             <Button
               variant="ghost"
               size="lg"
               onClick={prevPage}
               disabled={pageIndex === 0 || anim !== "none"}
-              className="absolute -left-14 top-1/2 -translate-y-1/2 z-20 h-12 w-12 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-500 shadow-xl disabled:opacity-20 transition-all"
+              className="hidden lg:flex absolute -left-14 top-1/2 -translate-y-1/2 z-20 h-12 w-12 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-500 shadow-xl disabled:opacity-20 transition-all"
             >
               <ChevronLeft className="h-6 w-6 text-amber-300" />
             </Button>
@@ -335,7 +334,7 @@ export default function AncestryBookPage() {
               size="lg"
               onClick={nextPage}
               disabled={pageIndex >= pages.length - 1 || anim !== "none"}
-              className="absolute -right-14 top-1/2 -translate-y-1/2 z-20 h-12 w-12 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-500 shadow-xl disabled:opacity-20 transition-all"
+              className="hidden lg:flex absolute -right-14 top-1/2 -translate-y-1/2 z-20 h-12 w-12 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-500 shadow-xl disabled:opacity-20 transition-all"
             >
               <ChevronRight className="h-6 w-6 text-amber-300" />
             </Button>
@@ -365,9 +364,9 @@ export default function AncestryBookPage() {
                     "0 25px 50px -12px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(139, 69, 19, 0.1)",
                 }}
               >
-                <div className="grid md:grid-cols-2 gap-0 min-h-[650px]">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-0 min-h-[500px] sm:min-h-[600px] md:min-h-[650px]">
                   {/* Left Page */}
-                  <div className="p-8 md:p-10 flex flex-col gap-5 bg-gradient-to-br from-amber-50/95 to-yellow-50/90 border-r-2 border-amber-900/20 relative">
+                  <div className="p-4 sm:p-6 md:p-8 lg:p-10 flex flex-col gap-3 sm:gap-4 md:gap-5 bg-gradient-to-br from-amber-50/95 to-yellow-50/90 md:border-r-2 border-amber-900/20 relative">
                     {/* Page texture overlay */}
                     <div
                       className="absolute inset-0 opacity-5"
@@ -376,12 +375,12 @@ export default function AncestryBookPage() {
                       }}
                     ></div>
 
-                    <div className="space-y-2 relative z-10">
-                      <h2 className="text-3xl font-serif font-bold text-slate-800 leading-snug">
+                    <div className="space-y-1 sm:space-y-2 relative z-10">
+                      <h2 className="text-xl sm:text-2xl md:text-3xl font-serif font-bold text-slate-800 leading-snug">
                         {page?.title || "Loading..."}
                       </h2>
                       {page?.subtitle && (
-                        <p className="text-base font-serif italic text-amber-700 border-l-2 border-amber-500 pl-3">
+                        <p className="text-sm sm:text-base font-serif italic text-amber-700 border-l-2 border-amber-500 pl-2 sm:pl-3">
                           {page.subtitle}
                         </p>
                       )}
@@ -393,7 +392,7 @@ export default function AncestryBookPage() {
                           <img
                             alt={page.title}
                             src={page.media.url}
-                            className="w-full h-72 object-cover rounded-sm shadow-lg border-4 border-white/80"
+                            className="w-full h-48 sm:h-56 md:h-72 object-cover rounded-sm shadow-lg border-2 sm:border-4 border-white/80"
                           />
                         </div>
                       </div>
@@ -403,7 +402,7 @@ export default function AncestryBookPage() {
                       <div className="flex-1 flex items-center justify-center relative z-10">
                         <video
                           src={page.media.url}
-                          className="w-full max-w-md h-72 rounded-sm shadow-lg border-4 border-white/80"
+                          className="w-full max-w-md h-48 sm:h-56 md:h-72 rounded-sm shadow-lg border-2 sm:border-4 border-white/80"
                           controls
                         />
                       </div>
@@ -411,8 +410,8 @@ export default function AncestryBookPage() {
 
                     {!page?.media?.url && (
                       <div className="flex-1 flex items-center justify-center relative z-10">
-                        <div className="w-full max-w-md h-72 bg-amber-100/60 rounded-sm border-4 border-white/80 shadow-lg flex items-center justify-center">
-                          <p className="text-amber-600/70 font-serif italic text-sm">
+                        <div className="w-full max-w-md h-48 sm:h-56 md:h-72 bg-amber-100/60 rounded-sm border-2 sm:border-4 border-white/80 shadow-lg flex items-center justify-center">
+                          <p className="text-amber-600/70 font-serif italic text-xs sm:text-sm">
                             No photo available
                           </p>
                         </div>
@@ -421,10 +420,10 @@ export default function AncestryBookPage() {
 
                     {page?.mediaList && page.mediaList.length > 1 && (
                       <div className="mt-auto relative z-10">
-                        <p className="text-[10px] font-serif text-amber-700 mb-2 uppercase tracking-wide">
+                        <p className="text-[9px] sm:text-[10px] font-serif text-amber-700 mb-1.5 sm:mb-2 uppercase tracking-wide">
                           Gallery
                         </p>
-                        <div className="grid grid-cols-6 gap-1.5">
+                        <div className="grid grid-cols-6 gap-1 sm:gap-1.5">
                           {page.mediaList.map((m, i) => (
                             <button
                               key={i}
@@ -436,10 +435,10 @@ export default function AncestryBookPage() {
                                 <img
                                   src={m.url}
                                   alt=""
-                                  className="w-full h-14 object-cover"
+                                  className="w-full h-10 sm:h-12 md:h-14 object-cover"
                                 />
                               ) : (
-                                <div className="w-full h-14 bg-slate-700 text-white text-[9px] flex items-center justify-center font-serif">
+                                <div className="w-full h-10 sm:h-12 md:h-14 bg-slate-700 text-white text-[8px] sm:text-[9px] flex items-center justify-center font-serif">
                                   ▶
                                 </div>
                               )}
@@ -451,7 +450,7 @@ export default function AncestryBookPage() {
                   </div>
 
                   {/* Right Page */}
-                  <div className="p-8 md:p-10 space-y-5 bg-gradient-to-br from-yellow-50/90 to-amber-50/95 flex flex-col relative">
+                  <div className="p-4 sm:p-6 md:p-8 lg:p-10 space-y-3 sm:space-y-4 md:space-y-5 bg-gradient-to-br from-yellow-50/90 to-amber-50/95 flex flex-col relative border-t md:border-t-0 border-amber-900/20">
                     {/* Page texture overlay */}
                     <div
                       className="absolute inset-0 opacity-5"
@@ -460,11 +459,11 @@ export default function AncestryBookPage() {
                       }}
                     ></div>
 
-                    <div className="flex-1 space-y-4 relative z-10">
+                    <div className="flex-1 space-y-3 sm:space-y-4 relative z-10">
                       {(page?.content ?? []).map((p, idx) => (
                         <p
                           key={idx}
-                          className="font-serif text-sm leading-relaxed text-slate-800/95 indent-6"
+                          className="font-serif text-xs sm:text-sm leading-relaxed text-slate-800/95 indent-4 sm:indent-6"
                         >
                           {p}
                         </p>
@@ -472,24 +471,49 @@ export default function AncestryBookPage() {
                     </div>
 
                     {/* Page number */}
-                    <div className="text-center text-xs font-serif text-amber-700/70 pt-4 border-t border-amber-300/30 relative z-10">
+                    <div className="text-center text-xs font-serif text-amber-700/70 pt-3 sm:pt-4 border-t border-amber-300/30 relative z-10">
                       {pageIndex + 1}
                     </div>
                   </div>
                 </div>
               </Card>
 
-              {/* Book spine effect */}
-              <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-gradient-to-r from-amber-900/60 via-amber-950/80 to-amber-900/60 -translate-x-1/2 pointer-events-none shadow-lg"></div>
+              {/* Book spine effect - hidden on mobile */}
+              <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-1 bg-gradient-to-r from-amber-900/60 via-amber-950/80 to-amber-900/60 -translate-x-1/2 pointer-events-none shadow-lg"></div>
+            </div>
+
+            {/* Mobile Navigation Buttons */}
+            <div className="flex lg:hidden justify-between mt-4 gap-2">
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={prevPage}
+                disabled={pageIndex === 0 || anim !== "none"}
+                className="flex-1 h-12 rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-500 shadow-xl disabled:opacity-20 transition-all"
+              >
+                <ChevronLeft className="h-5 w-5 text-amber-300 mr-2" />
+                <span className="text-amber-300 text-sm">Previous</span>
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={nextPage}
+                disabled={pageIndex >= pages.length - 1 || anim !== "none"}
+                className="flex-1 h-12 rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-500 shadow-xl disabled:opacity-20 transition-all"
+              >
+                <span className="text-amber-300 text-sm">Next</span>
+                <ChevronRight className="h-5 w-5 text-amber-300 ml-2" />
+              </Button>
             </div>
           </div>
         </div>
 
         {pages.length === 0 && (
-          <div className="text-center">
-            <Card className="max-w-2xl mx-auto p-10 bg-amber-50 border-2 border-amber-800/30 shadow-xl">
-              <BookOpen className="h-16 w-16 text-amber-700/50 mx-auto mb-4" />
-              <p className="font-serif text-lg text-amber-800 leading-relaxed">
+          <div className="text-center px-2">
+            <Card className="max-w-2xl mx-auto p-6 sm:p-10 bg-amber-50 border-2 border-amber-800/30 shadow-xl">
+              <BookOpen className="h-12 w-12 sm:h-16 sm:w-16 text-amber-700/50 mx-auto mb-3 sm:mb-4" />
+              <p className="font-serif text-base sm:text-lg text-amber-800 leading-relaxed">
                 Your ancestry book awaits its first story. Add relatives in your
                 family tree to begin writing your family's legacy.
               </p>
