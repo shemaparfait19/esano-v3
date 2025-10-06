@@ -458,6 +458,56 @@ export function TreeCanvas({
     setDraggingNode(null);
   };
 
+  // ===== Touch events (mobile)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setContextMenu(null);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const t = e.touches[0];
+    const worldX =
+      (t.clientX - rect.left - canvasState.panX) / canvasState.zoom;
+    const worldY = (t.clientY - rect.top - canvasState.panY) / canvasState.zoom;
+    const tappedNode = getNodeAtPosition(worldX, worldY);
+    if (tappedNode) {
+      setDraggingNode(tappedNode.id);
+      setNodeOffsets({ x: worldX - tappedNode.x, y: worldY - tappedNode.y });
+      setSelectedNode(tappedNode.id);
+      onNodeClick?.(tappedNode.id);
+    } else {
+      setIsDraggingCanvas(true);
+      setDragStart({ x: t.clientX, y: t.clientY });
+      setLastPan({ x: canvasState.panX, y: canvasState.panY });
+      setSelectedNode(null);
+      onCanvasClick?.();
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const t = e.touches[0];
+    const worldX =
+      (t.clientX - rect.left - canvasState.panX) / canvasState.zoom;
+    const worldY = (t.clientY - rect.top - canvasState.panY) / canvasState.zoom;
+    if (draggingNode) {
+      const newX = worldX - nodeOffsets.x;
+      const newY = worldY - nodeOffsets.y;
+      const memberToUpdate = members.find((m) => m.id === draggingNode);
+      if (memberToUpdate) {
+        updateMember(draggingNode, { ...memberToUpdate, x: newX, y: newY });
+      }
+    } else if (isDraggingCanvas) {
+      const deltaX = t.clientX - dragStart.x;
+      const deltaY = t.clientY - dragStart.y;
+      updateCanvasState({ panX: lastPan.x + deltaX, panY: lastPan.y + deltaY });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDraggingCanvas(false);
+    setDraggingNode(null);
+  };
+
   const handleDoubleClick = (e: React.MouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -591,6 +641,9 @@ export function TreeCanvas({
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
         onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{ touchAction: "none" }}
       />
 

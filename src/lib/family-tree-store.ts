@@ -28,6 +28,7 @@ interface FamilyTreeState {
   isFullscreen: boolean;
   isLoading: boolean;
   error: string | null;
+  dirty: boolean;
 
   // History (session-only)
   past: FamilyTree[];
@@ -59,6 +60,7 @@ interface FamilyTreeState {
   setFullscreen: (fullscreen: boolean) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setDirty: (dirty: boolean) => void;
 
   // Computed selectors
   getMember: (id: string) => FamilyMember | undefined;
@@ -92,6 +94,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
     isFullscreen: false,
     isLoading: false,
     error: null,
+    dirty: false,
     past: [],
     future: [],
 
@@ -104,6 +107,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
         members: tree.members,
         edges: tree.edges,
         error: null,
+        dirty: false,
       })),
 
     addMember: (memberData) => {
@@ -112,6 +116,8 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
         id: `member_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        xp: 0,
+        level: 1,
       };
 
       set((state) => ({
@@ -125,6 +131,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
               updatedAt: new Date().toISOString(),
             }
           : null,
+        dirty: true,
       }));
     },
 
@@ -149,6 +156,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
                 updatedAt: new Date().toISOString(),
               }
             : null,
+          dirty: true,
         };
       });
     },
@@ -179,6 +187,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
                 updatedAt: new Date().toISOString(),
               }
             : null,
+          dirty: true,
         };
       });
     },
@@ -193,18 +202,41 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
         },
       };
 
-      set((state) => ({
-        past: state.tree ? [...state.past, state.tree].slice(-50) : state.past,
-        future: [],
-        edges: [...state.edges, newEdge],
-        tree: state.tree
-          ? {
-              ...state.tree,
-              edges: [...state.edges, newEdge],
+      set((state) => {
+        // XP updates for involved members
+        const xpDelta = 5;
+        const updatedMembers = state.members.map((m) => {
+          if (m.id === newEdge.fromId || m.id === newEdge.toId) {
+            const nextXp = (m.xp || 0) + xpDelta;
+            const nextLevel = Math.max(1, Math.floor(nextXp / 100) + 1);
+            return {
+              ...m,
+              xp: nextXp,
+              level: nextLevel,
               updatedAt: new Date().toISOString(),
-            }
-          : null,
-      }));
+            };
+          }
+          return m;
+        });
+
+        return {
+          past: state.tree
+            ? [...state.past, state.tree].slice(-50)
+            : state.past,
+          future: [],
+          members: updatedMembers,
+          edges: [...state.edges, newEdge],
+          tree: state.tree
+            ? {
+                ...state.tree,
+                members: updatedMembers,
+                edges: [...state.edges, newEdge],
+                updatedAt: new Date().toISOString(),
+              }
+            : null,
+          dirty: true,
+        };
+      });
     },
 
     removeEdge: (id) => {
@@ -224,6 +256,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
                 updatedAt: new Date().toISOString(),
               }
             : null,
+          dirty: true,
         };
       });
     },
@@ -256,6 +289,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
                 updatedAt: new Date().toISOString(),
               }
             : null,
+          dirty: true,
         };
       });
     },
@@ -309,6 +343,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
     setFullscreen: (fullscreen) => set({ isFullscreen: fullscreen }),
     setLoading: (loading) => set({ isLoading: loading }),
     setError: (error) => set({ error }),
+    setDirty: (dirty) => set({ dirty }),
 
     // Computed selectors
     getMember: (id) => get().members.find((member) => member.id === id),

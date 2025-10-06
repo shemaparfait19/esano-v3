@@ -32,6 +32,7 @@ export function NodeEditor({
   onDelete,
 }: NodeEditorProps) {
   const { getMember, updateMember } = useFamilyTreeStore();
+  const { setDirty } = useFamilyTreeStore();
   const [formData, setFormData] = useState<Partial<FamilyMember>>({});
   const [isDirty, setIsDirty] = useState(false);
 
@@ -72,6 +73,7 @@ export function NodeEditor({
     updateMember(member.id, updatedMember);
     onSave(updatedMember);
     setIsDirty(false);
+    setDirty(true);
   };
 
   const toggleHead = () => {
@@ -83,6 +85,7 @@ export function NodeEditor({
     };
     updateMember(member.id, updated);
     onSave(updated);
+    setDirty(true);
   };
 
   const [isUploading, setIsUploading] = useReactState(false);

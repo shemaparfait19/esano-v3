@@ -55,6 +55,8 @@ export default function FamilyTreePage() {
     setFullscreen,
     setLoading,
     setError,
+    dirty,
+    setDirty,
   } = useFamilyTreeStore();
 
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
@@ -140,6 +142,7 @@ export default function FamilyTreePage() {
         title: "Success",
         description: "Family tree saved successfully",
       });
+      setDirty(false);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to save family tree";
@@ -153,6 +156,15 @@ export default function FamilyTreePage() {
       setLoading(false);
     }
   };
+
+  // Debounced autosave when dirty
+  useEffect(() => {
+    if (!dirty) return;
+    const t = setTimeout(() => {
+      saveFamilyTree();
+    }, 800);
+    return () => clearTimeout(t);
+  }, [dirty]);
 
   const handleAddMember = () => {
     setShowAddMemberDialog(true);
@@ -191,8 +203,8 @@ export default function FamilyTreePage() {
     setShowAddMemberDialog(false);
     setNewMember({});
 
-    // Auto-save after adding member
-    setTimeout(saveFamilyTree, 500);
+    // XP: adding a member
+    setDirty(true);
   };
 
   const handleAddRelationship = () => {
@@ -234,8 +246,8 @@ export default function FamilyTreePage() {
     setShowAddRelationshipDialog(false);
     setNewRelationship({});
 
-    // Auto-save after adding relationship
-    setTimeout(saveFamilyTree, 500);
+    // XP: adding a relationship
+    setDirty(true);
   };
 
   const handleNodeClick = (nodeId: string) => {

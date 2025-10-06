@@ -6,6 +6,8 @@ export interface FamilyMember {
   x?: number;
   y?: number;
   isHeadOfFamily?: boolean;
+  xp?: number;
+  level?: number;
   birthDate?: string;
   deathDate?: string;
   gender?: "male" | "female" | "other";
