@@ -29,13 +29,30 @@ export async function POST(request: NextRequest) {
 
     const ref = adminDb.collection("familyTrees").doc(userId);
     const snap = await ref.get();
-    if (!snap.exists) {
-      return NextResponse.json({ error: "Tree not found" }, { status: 404 });
-    }
-    const tree = snap.data() as any;
+    let tree = snap.exists
+      ? (snap.data() as any)
+      : {
+          id: userId,
+          ownerId: userId,
+          members: [],
+          edges: [],
+          settings: {
+            colorScheme: "default",
+            viewMode: "classic",
+            layout: "horizontal",
+            branchColors: {},
+            nodeStyles: {},
+          },
+          annotations: [],
+          version: { current: 1, history: [] },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
     const members = Array.isArray(tree.members) ? tree.members : [];
-    const updatedMembers = members.map((m: any) => {
-      if (m.id !== memberId) return m;
+    const idx = members.findIndex((m: any) => m.id === memberId);
+
+    const applyToMember = (m: any) => {
       if (kind === "voice") {
         const voice = Array.isArray(m.voiceUrls) ? m.voiceUrls : [];
         return { ...m, voiceUrls: [...voice, dataUrl] };
@@ -62,13 +79,30 @@ export async function POST(request: NextRequest) {
       }
       const media = Array.isArray(m.mediaUrls) ? m.mediaUrls : [];
       return { ...m, mediaUrls: [...media, dataUrl] };
-    });
+    };
 
-    await ref.set({
-      ...tree,
-      members: updatedMembers,
-      updatedAt: new Date().toISOString(),
-    });
+    if (idx >= 0) {
+      // Update existing member
+      tree.members = members.map((m: any, i: number) =>
+        i === idx ? applyToMember(m) : m
+      );
+    } else {
+      // Create a skeleton member so upload succeeds
+      const skeleton = applyToMember({
+        id: memberId,
+        fullName: "",
+        firstName: "",
+        lastName: "",
+        tags: [],
+        customFields: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      tree.members = [...members, skeleton];
+    }
+
+    tree.updatedAt = new Date().toISOString();
+    await ref.set(tree);
     return NextResponse.json({ success: true, url: dataUrl });
   } catch (e: any) {
     return NextResponse.json(
