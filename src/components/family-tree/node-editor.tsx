@@ -176,8 +176,8 @@ export function NodeEditor({
   if (!member) return null;
 
   return (
-    <Card className="w-80 max-h-[80vh] overflow-y-auto">
-      <CardHeader className="pb-3">
+    <Card className="w-[420px] max-h-[85vh] overflow-hidden flex flex-col">
+      <CardHeader className="pb-3 sticky top-0 bg-white z-10 border-b">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Edit Member</CardTitle>
           <Button
@@ -259,7 +259,7 @@ export function NodeEditor({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 overflow-y-auto px-6 pt-4 pb-6">
         {/* XP / Level */}
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -595,7 +595,7 @@ export function NodeEditor({
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2 pt-4">
+        <div className="flex gap-2 pt-4 sticky bottom-0 bg-white pb-2">
           <Button
             type="button"
             variant={member.isHeadOfFamily ? "default" : "outline"}

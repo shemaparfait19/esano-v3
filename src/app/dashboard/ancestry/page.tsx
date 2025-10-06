@@ -14,6 +14,7 @@ type PageData = {
   title: string;
   subtitle?: string;
   media?: { url: string; type: "photo" | "video" };
+  mediaList?: Array<{ url: string; type: "photo" | "video" }>;
   content: string[]; // paragraphs
 };
 
@@ -111,18 +112,19 @@ export default function AncestryBookPage() {
         m.originRegion || (m.location ? `Lives in ${m.location}` : undefined);
       const subtitle = relations.get(m.id) || origin;
       const content: string[] = [];
-      // Select featured media
+      // Select featured media & build list
       let media: PageData["media"] | undefined;
+      const mediaList: Array<{ url: string; type: "photo" | "video" }> = [];
       const featured = (m as any)?.customFields?.featuredMediaUrl as
         | string
         | undefined;
       if (featured) {
-        media = {
-          url: featured,
-          type: featured.includes("video") ? "video" : "photo",
-        };
+        const t = featured.includes("video") ? "video" : "photo";
+        media = { url: featured, type: t };
+        mediaList.push({ url: featured, type: t });
       } else if (m.avatarUrl) {
         media = { url: m.avatarUrl, type: "photo" };
+        mediaList.push({ url: m.avatarUrl, type: "photo" });
       } else if (Array.isArray(m.timeline)) {
         const withUrl = m.timeline
           .slice()
@@ -131,13 +133,34 @@ export default function AncestryBookPage() {
         if (withUrl?.url) {
           const type = withUrl.type === "video" ? "video" : "photo";
           media = { url: withUrl.url, type };
+          mediaList.push({ url: withUrl.url, type });
         }
       }
       if (!media && Array.isArray(m.mediaUrls) && m.mediaUrls.length > 0) {
-        media = {
-          url: m.mediaUrls[0],
-          type: (m.mediaUrls[0].includes("video") ? "video" : "photo") as any,
-        };
+        const firstType = (
+          m.mediaUrls[0].includes("video") ? "video" : "photo"
+        ) as "photo" | "video";
+        media = { url: m.mediaUrls[0], type: firstType };
+      }
+      // add more media from timeline and mediaUrls (cap 6)
+      if (Array.isArray(m.timeline)) {
+        m.timeline
+          .filter((t) => !!t.url)
+          .slice(0, 4)
+          .forEach((t) =>
+            mediaList.push({
+              url: t.url!,
+              type: t.type === "video" ? "video" : "photo",
+            })
+          );
+      }
+      if (Array.isArray(m.mediaUrls)) {
+        m.mediaUrls.slice(0, 4).forEach((u) =>
+          mediaList.push({
+            url: u,
+            type: u.includes("video") ? "video" : "photo",
+          })
+        );
       }
       if (m.birthDate)
         content.push(
@@ -171,7 +194,11 @@ export default function AncestryBookPage() {
       if (m.notes) content.push(m.notes);
       if (content.length === 0)
         content.push("No further details recorded yet.");
-      return { id: m.id, title, subtitle, media, content };
+      const seen = new Set<string>();
+      const dedup = mediaList
+        .filter((x) => (seen.has(x.url) ? false : (seen.add(x.url), true)))
+        .slice(0, 6);
+      return { id: m.id, title, subtitle, media, mediaList: dedup, content };
     };
     // Simple order: ancestors first (parents/grandparents), then others
     const scored = members.map((m) => ({
@@ -286,6 +313,38 @@ export default function AncestryBookPage() {
                       className="w-full h-60 rounded-md border"
                       controls
                     />
+                  )}
+                  {page?.mediaList && page.mediaList.length > 1 && (
+                    <div className="mt-3 grid grid-cols-6 gap-2">
+                      {page.mediaList.map((m, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            // swap featured
+                            const newPages = pages.slice();
+                            const cur = newPages[pageIndex];
+                            if (cur) {
+                              (cur as any).media = m;
+                            }
+                          }}
+                          className="border rounded overflow-hidden hover:opacity-80"
+                          title={m.type}
+                        >
+                          {m.type === "photo" ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={m.url}
+                              alt=""
+                              className="w-full h-14 object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-14 bg-black text-white text-[10px] flex items-center justify-center">
+                              Video
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="p-6 space-y-4">
