@@ -93,6 +93,14 @@ export function NodeEditor({
 
   const [isUploading, setIsUploading] = useReactState(false);
   const [uploadError, setUploadError] = useReactState<string | null>(null);
+  const [isUploadingVoice, setIsUploadingVoice] = useReactState(false);
+  const [voiceError, setVoiceError] = useReactState<string | null>(null);
+  const [tlUploading, setTlUploading] = useReactState(false);
+  const [tlError, setTlError] = useReactState<string | null>(null);
+  const [tlTitle, setTlTitle] = useReactState("");
+  const [tlDate, setTlDate] = useReactState<string>(
+    new Date().toISOString().slice(0, 10)
+  );
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!member) return;
@@ -442,6 +450,150 @@ export function NodeEditor({
           )}
         </div>
 
+        {/* Timeline */}
+        <div>
+          <Label>Timeline</Label>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <Input
+              placeholder="Title (e.g., Wedding)"
+              value={tlTitle}
+              onChange={(e) => setTlTitle(e.target.value)}
+            />
+            <Input
+              type="date"
+              value={tlDate}
+              onChange={(e) => setTlDate(e.target.value)}
+            />
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="file"
+              accept="image/*,video/*,audio/*"
+              onChange={async (e) => {
+                if (!member) return;
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setTlUploading(true);
+                setTlError(null);
+                try {
+                  const form = new FormData();
+                  form.append("userId", member.id.split("_")[0] || "");
+                  form.append("memberId", member.id);
+                  form.append("file", file);
+                  form.append("kind", "timeline");
+                  form.append("title", tlTitle || file.name);
+                  const iso = tlDate
+                    ? new Date(tlDate + "T00:00:00").toISOString()
+                    : new Date().toISOString();
+                  form.append("date", iso);
+                  const resp = await fetch("/api/family-tree/media", {
+                    method: "POST",
+                    body: form,
+                  });
+                  const data = await resp.json();
+                  if (!resp.ok) throw new Error(data?.error || "Upload failed");
+                  const current = Array.isArray(member.timeline)
+                    ? member.timeline
+                    : [];
+                  const updated: FamilyMember = {
+                    ...member,
+                    timeline: [
+                      ...current,
+                      {
+                        id: `tl_${Date.now()}`,
+                        type: file.type.startsWith("audio")
+                          ? "audio"
+                          : file.type.startsWith("video")
+                          ? "video"
+                          : "photo",
+                        date: iso,
+                        title: tlTitle || file.name,
+                        url: data.url,
+                      },
+                    ],
+                    updatedAt: new Date().toISOString(),
+                  };
+                  updateMember(member.id, updated);
+                  onSave(updated);
+                  setDirty(true);
+                } catch (err: any) {
+                  setTlError(err?.message || "Upload failed");
+                } finally {
+                  setTlUploading(false);
+                }
+              }}
+            />
+            {tlUploading && (
+              <span className="text-xs text-muted-foreground">Adding...</span>
+            )}
+            {tlError && (
+              <span className="text-xs text-destructive">{tlError}</span>
+            )}
+          </div>
+          <div className="mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!member) return;
+                if (!tlTitle) return;
+                const current = Array.isArray(member.timeline)
+                  ? member.timeline
+                  : [];
+                const iso = tlDate
+                  ? new Date(tlDate + "T00:00:00").toISOString()
+                  : new Date().toISOString();
+                const updated: FamilyMember = {
+                  ...member,
+                  timeline: [
+                    ...current,
+                    {
+                      id: `tl_${Date.now()}`,
+                      type: "event",
+                      date: iso,
+                      title: tlTitle,
+                    },
+                  ],
+                  updatedAt: new Date().toISOString(),
+                };
+                updateMember(member.id, updated);
+                onSave(updated);
+                setDirty(true);
+                setTlTitle("");
+              }}
+            >
+              Add Event
+            </Button>
+          </div>
+          {Array.isArray(member.timeline) && member.timeline.length > 0 && (
+            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+              {member.timeline
+                .slice()
+                .sort((a, b) => a.date.localeCompare(b.date))
+                .map((t) => (
+                  <div
+                    key={t.id}
+                    className="text-xs p-2 border rounded flex items-center gap-2"
+                  >
+                    <span className="shrink-0 text-muted-foreground">
+                      {new Date(t.date).toLocaleDateString()}
+                    </span>
+                    <span className="font-medium">{t.title || t.type}</span>
+                    {t.url && (
+                      <a
+                        href={t.url}
+                        target="_blank"
+                        className="ml-auto underline"
+                      >
+                        View
+                      </a>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
         {/* Actions */}
         <div className="flex gap-2 pt-4">
           <Button
@@ -452,6 +604,54 @@ export function NodeEditor({
           >
             <Crown className="h-4 w-4 mr-2" />
             {member.isHeadOfFamily ? "Head of Family" : "Set as Head"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={async () => {
+              try {
+                const ownerId = member.id.split("_")[0] || "";
+                const resp = await fetch("/api/family-tree/story", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    userId: ownerId,
+                    memberId: member.id,
+                  }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data?.error || "Failed");
+                const story: string = data.story;
+                const currentTl = Array.isArray(member.timeline)
+                  ? member.timeline
+                  : [];
+                const updated: FamilyMember = {
+                  ...member,
+                  notes: `${
+                    member.notes ? member.notes + "\n\n" : ""
+                  }${story}`.trim(),
+                  timeline: [
+                    ...currentTl,
+                    {
+                      id: `tl_${Date.now()}`,
+                      type: "note",
+                      date: new Date().toISOString(),
+                      title: "AI-generated Family Story",
+                      description: story,
+                    },
+                  ],
+                  updatedAt: new Date().toISOString(),
+                };
+                updateMember(member.id, updated);
+                onSave(updated);
+                setDirty(true);
+              } catch (e: any) {
+                // noop; a toast could be added if desired
+              }
+            }}
+          >
+            Generate AI Story
           </Button>
           <Button onClick={handleSave} disabled={!isDirty} className="flex-1">
             <Save className="h-4 w-4 mr-2" />
