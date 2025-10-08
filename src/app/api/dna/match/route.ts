@@ -175,22 +175,43 @@ export async function POST(req: Request) {
     for (const candidate of candidates) {
       try {
         const candidateSNPs = parseAndFilterSNPs(candidate.text);
+        const lowOverlap = userSNPs.length < 200 || candidateSNPs.length < 200;
 
-        if (candidateSNPs.length < 200) continue;
-
-        // Perform comprehensive kinship analysis
-        const analysis = analyzeKinship(userSNPs, candidateSNPs);
-
-        // Only include matches with sufficient data quality
-        if (analysis.metrics.totalSNPs >= 1000) {
+        if (lowOverlap) {
+          // Basic similarity fallback for small inputs (VCF/raw string)
+          const score = basicSimilarity(dnaText, candidate.text);
+          const rel = interpretSimilarity(score);
           matches.push({
             userId: candidate.userId,
             fileName: candidate.fileName,
-            relationship: analysis.relationship,
-            confidence: analysis.confidence,
-            details: analysis.details,
-            metrics: analysis.metrics,
+            relationship: rel.relationship,
+            confidence: rel.confidence,
+            details: `Low-SNP fallback similarity: ${score}%`,
+            metrics: {
+              totalSNPs: 0,
+              ibdSegments: 0,
+              totalIBD_cM: 0,
+              ibs0: 0,
+              ibs1: 0,
+              ibs2: 0,
+              kinshipCoefficient: 0,
+            },
           });
+        } else {
+          // Perform comprehensive kinship analysis
+          const analysis = analyzeKinship(userSNPs, candidateSNPs);
+
+          // Only include matches with sufficient data quality
+          if (analysis.metrics.totalSNPs >= 200) {
+            matches.push({
+              userId: candidate.userId,
+              fileName: candidate.fileName,
+              relationship: analysis.relationship,
+              confidence: analysis.confidence,
+              details: analysis.details,
+              metrics: analysis.metrics,
+            });
+          }
         }
       } catch (err) {
         console.error(`Error analyzing candidate ${candidate.userId}:`, err);
@@ -807,3 +828,75 @@ String.prototype.hashCode = function () {
   }
   return Math.abs(hash);
 };
+
+// ============================================================================
+// Basic similarity fallback (for very small inputs)
+// ============================================================================
+
+function basicSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const isVcf1 = a.includes("#CHROM") && a.includes("POS");
+  const isVcf2 = b.includes("#CHROM") && b.includes("POS");
+  if (isVcf1 && isVcf2) {
+    return compareVcfBlocks(a, b);
+  }
+  const cleanA = a.toUpperCase().replace(/[^ACGT]/g, "");
+  const cleanB = b.toUpperCase().replace(/[^ACGT]/g, "");
+  const minLen = Math.min(cleanA.length, cleanB.length);
+  if (minLen === 0) return 0;
+  let eq = 0;
+  for (let i = 0; i < minLen; i++) if (cleanA[i] === cleanB[i]) eq++;
+  return Math.round((eq / minLen) * 100);
+}
+
+function compareVcfBlocks(v1: string, v2: string): number {
+  try {
+    const lines1 = v1
+      .split(/\r?\n/)
+      .filter((l) => l.trim() && !l.startsWith("#"));
+    const lines2 = v2
+      .split(/\r?\n/)
+      .filter((l) => l.trim() && !l.startsWith("#"));
+    if (lines1.length === 0 || lines2.length === 0) return 0;
+    const map1 = new Map<string, string>();
+    const map2 = new Map<string, string>();
+    for (const line of lines1) {
+      const parts = line.split(/\s+/);
+      if (parts.length >= 5) {
+        const key = `${parts[0]}_${parts[1]}_${parts[3]}_${parts[4]}`;
+        map1.set(key, parts[9] || "");
+      }
+    }
+    for (const line of lines2) {
+      const parts = line.split(/\s+/);
+      if (parts.length >= 5) {
+        const key = `${parts[0]}_${parts[1]}_${parts[3]}_${parts[4]}`;
+        map2.set(key, parts[9] || "");
+      }
+    }
+    const total = Math.max(map1.size, map2.size);
+    if (total === 0) return 0;
+    let match = 0;
+    for (const [k, g] of map1) if (map2.has(k) && map2.get(k) === g) match++;
+    return Math.round((match / total) * 100);
+  } catch {
+    return 0;
+  }
+}
+
+function interpretSimilarity(score: number): {
+  relationship: string;
+  confidence: number;
+} {
+  if (score >= 99.5)
+    return { relationship: "Identical (same person)", confidence: 95 };
+  if (score >= 99) return { relationship: "Identical twins", confidence: 90 };
+  if (score >= 50)
+    return { relationship: "Parent-child or siblings", confidence: 75 };
+  if (score >= 25)
+    return { relationship: "Grandparent or half-sibling", confidence: 60 };
+  if (score >= 12.5) return { relationship: "First cousin", confidence: 55 };
+  if (score >= 6.25) return { relationship: "Second cousin", confidence: 50 };
+  if (score >= 3.125) return { relationship: "Third cousin", confidence: 45 };
+  return { relationship: "Distant or no relation", confidence: 30 };
+}
