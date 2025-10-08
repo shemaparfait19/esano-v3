@@ -46,7 +46,7 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
     }
     try {
       setLoading(true);
-      const dnaText = (await file.text()).slice(0, 200_000);
+      const dnaText = (await file.text()).slice(0, 1_000_000);
       const resp = await fetch("/api/dna/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
