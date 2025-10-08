@@ -61,33 +61,8 @@ export default function ResultCard({
   );
 
   const handleConnect = async () => {
-    if (result.type !== "user") return;
-    if (!user?.uid) {
-      toast({ title: "Sign in required", variant: "destructive" });
-      return;
-    }
-    setIsConnecting(true);
-    try {
-      const resp = await fetch("/api/requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromUserId: user.uid, toUserId: result.id }),
-      });
-      if (!resp.ok) throw new Error("send failed");
-      setStatus("pending");
-      toast({
-        title: "Connection request sent!",
-        description: `Your request has been sent to ${result.name}`,
-      });
-    } catch (error) {
-      toast({
-        title: "Failed to send request",
-        description: "Please try again later",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
-    }
+    // Disabled on search results: connect from the profile page
+    return;
   };
 
   const handleViewProfile = () => {
@@ -281,26 +256,9 @@ export default function ResultCard({
                 </Button>
               )}
 
-              {result.type === "user" && status !== "connected" && (
-                <Button
-                  size="sm"
-                  onClick={handleConnect}
-                  disabled={isConnecting}
-                  className="flex items-center gap-1"
-                >
-                  {getConnectionStatusIcon(status)}
-                  {isConnecting
-                    ? "Sending..."
-                    : getConnectionStatusText(status)}
-                </Button>
-              )}
+              {/* Connect suppressed in search; use View Profile to connect */}
 
-              {result.type === "user" && status === "pending" && (
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  Request Pending
-                </Badge>
-              )}
+              {/* Pending badge hidden here to keep results clean */}
             </div>
           </div>
         </div>
