@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { adminDb, adminStorage } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,11 +36,37 @@ export async function POST(req: Request) {
       .filter((u) => typeof u.dnaData === "string" && u.dnaData.length > 0)
       .slice(0, 50);
 
-    const candidates = comparatorUsers.map((u) => ({
+    const candidatesFromUsers = comparatorUsers.map((u) => ({
       userId: u.id,
       fileName: u.dnaFileName || "user_dna.txt",
       text: String(u.dnaData).slice(0, 200_000),
     }));
+
+    // Read a limited number of dna_data Storage files as text
+    const bucket = adminStorage.bucket();
+    const storageCandidates: {
+      userId: string;
+      fileName: string;
+      text: string;
+    }[] = [];
+    for (const meta of all.slice(0, 25)) {
+      try {
+        if (!meta.filePath) continue;
+        const [buf] = await bucket
+          .file(meta.filePath)
+          .download({ validation: false });
+        const asText = buf.toString("utf8").slice(0, 200_000);
+        if (asText.length > 0) {
+          storageCandidates.push({
+            userId: meta.userId,
+            fileName: meta.fileName,
+            text: asText,
+          });
+        }
+      } catch {}
+    }
+
+    const candidates = [...candidatesFromUsers, ...storageCandidates];
 
     if (candidates.length === 0) {
       return NextResponse.json({ matches: [] satisfies MatchOutput[] });

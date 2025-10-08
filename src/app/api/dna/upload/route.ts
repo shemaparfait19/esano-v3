@@ -54,6 +54,7 @@ export async function POST(req: Request) {
       userId,
       fileName,
       fileUrl: signedUrl,
+      filePath: dest,
       uploadDate: new Date().toISOString(),
       fileSize: buf.byteLength,
       status: "active" as const,
