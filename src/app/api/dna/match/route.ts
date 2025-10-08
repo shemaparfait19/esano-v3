@@ -52,14 +52,7 @@ export async function POST(req: Request) {
     // Adjustable threshold - lower for testing, but less accurate
     const MIN_SNPS = parseInt(process.env.MIN_SNPS_THRESHOLD || "10");
 
-    if (userSNPs.length < MIN_SNPS) {
-      return NextResponse.json(
-        {
-          error: `Insufficient SNP data. Need at least ${MIN_SNPS} valid SNPs for analysis. Found: ${userSNPs.length}`,
-        },
-        { status: 400 }
-      );
-    }
+    const lowSnp = userSNPs.length < MIN_SNPS;
 
     // Fetch all active DNA files metadata
     const snap = await adminDb.collection("dna_data").get();
