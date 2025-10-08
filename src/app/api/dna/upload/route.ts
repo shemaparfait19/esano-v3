@@ -123,44 +123,15 @@ export async function POST(req: Request) {
       } catch {}
       return NextResponse.json({ ok: true, id: savedRef.id, ...doc });
     } else {
-      const bucket = adminStorage.bucket();
-      const fileName = file.name || `dna_${Date.now()}.txt`;
-      const dest = `dna-files/${userId}/${fileName}`;
-      const gcsFile = bucket.file(dest);
-      await gcsFile.save(buf, {
-        contentType: file.type || "text/plain",
-        resumable: false,
-        metadata: { cacheControl: "private, max-age=0" },
-      });
-      const [signedUrl] = await gcsFile.getSignedUrl({
-        action: "read",
-        expires: Date.now() + 1000 * 60 * 60 * 2,
-      });
-      const textSample = buf.toString("utf8").slice(0, 200_000);
-      const doc = {
-        userId,
-        fileName,
-        fileUrl: signedUrl,
-        filePath: dest,
-        uploadDate: new Date().toISOString(),
-        fileSize: buf.byteLength,
-        status: "active" as const,
-        backend: "gcs" as const,
-        textSample,
-      };
-      const savedRef = await adminDb.collection("dna_data").add(doc);
-      try {
-        await adminDb.collection("users").doc(userId).set(
-          {
-            userId,
-            dnaData: textSample,
-            dnaFileName: fileName,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-      } catch {}
-      return NextResponse.json({ ok: true, id: savedRef.id, ...doc });
+      // No Google Drive (user/service) configured; avoid falling back to GCS to prevent bucket errors
+      return NextResponse.json(
+        {
+          error:
+            "No Google Drive connection found. Click 'Connect Google Drive' on your profile first.",
+          reason: "no_drive_connection",
+        },
+        { status: 400 }
+      );
     }
   } catch (e: any) {
     return NextResponse.json(
