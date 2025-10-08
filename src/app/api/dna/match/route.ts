@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     const userSNPs = parseAndFilterSNPs(dnaText);
 
     // Adjustable threshold - lower for testing, but less accurate
-    const MIN_SNPS = parseInt(process.env.MIN_SNPS_THRESHOLD || "100");
+    const MIN_SNPS = parseInt(process.env.MIN_SNPS_THRESHOLD || "10");
 
     if (userSNPs.length < MIN_SNPS) {
       return NextResponse.json(
@@ -187,7 +187,11 @@ export async function POST(req: Request) {
 
 function parseAndFilterSNPs(text: string): SNP[] {
   const snps: SNP[] = [];
-  const lines = text.split(/\r?\n/);
+  // Split on newlines, but also split single-line VCF blobs by spaces with record count heuristic
+  const raw = text.includes("\n")
+    ? text
+    : text.replace(/\s+#CHROM/g, "\n#CHROM").replace(/\s+chr/g, "\nchr");
+  const lines = raw.split(/\r?\n/);
   const seenPositions = new Set<string>();
 
   for (const line of lines) {
@@ -209,10 +213,21 @@ function parseAndFilterSNPs(text: string): SNP[] {
       pos = parseInt(p);
       geno = genoStr;
     } else if (parts.length >= 3) {
-      // Format: chr1 69511 0/1 or 1 69511 0/1
+      // Format: chr1 69511 0/1 or full VCF row with FORMAT GT:GQ 0/1:99 at the end
       chr = parts[0].replace("chr", "");
       pos = parseInt(parts[1]);
-      geno = parts[2];
+      // Prefer explicit GT in VCF if present
+      const formatIdx = parts.findIndex((p) => p.includes(":"));
+      const gtField = parts.find((p) => /^(0|1|2)[\/|](0|1|2):/.test(p));
+      if (gtField) {
+        geno = gtField.split(":")[0];
+      } else if (parts.length >= 10 && /GT/.test(parts[8])) {
+        const sample = parts[9];
+        const gt = sample.split(":")[0];
+        geno = gt;
+      } else {
+        geno = parts[2];
+      }
     } else if (t.includes(":")) {
       // Format: rs123:0/1
       const [rsid, genoStr] = t.split(":");
