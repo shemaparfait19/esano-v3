@@ -13,6 +13,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { useRouter } from "next/navigation";
 import { Dna, Search, Loader2 } from "lucide-react";
 
 type Match = {
@@ -28,11 +31,15 @@ type Match = {
 export function DnaMatchFinder({ userId }: { userId: string }) {
   const { toast } = useToast();
   const { user } = useAuth() as any;
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   const [dnaTextInput, setDnaTextInput] = useState("");
   const [diag, setDiag] = useState<any | null>(null);
+  const [statusByUser, setStatusByUser] = useState<
+    Record<string, { requested: boolean; connected: boolean }>
+  >({});
 
   const onFind = async () => {
     const hasText = dnaTextInput && dnaTextInput.trim().length > 0;
@@ -65,7 +72,9 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
       const data = await resp.json();
       setDiag(data?._diag || null);
       if (!resp.ok) throw new Error(data?.error || "Match failed");
-      setMatches(Array.isArray(data.matches) ? data.matches : []);
+      const list = Array.isArray(data.matches) ? data.matches : [];
+      setMatches(list);
+      updateStatuses(list.map((m: any) => m.userId));
       // Persist matches to profile so Relatives page shows them
       try {
         await fetch("/api/dna/save-matches", {
@@ -93,6 +102,48 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateStatuses = async (uids: string[]) => {
+    if (!user?.uid || uids.length === 0) return;
+    try {
+      const reqRef = collection(db, "connectionRequests");
+      const conRef = collection(db, "connections");
+      const [outgoing, acceptedA, acceptedB] = await Promise.all([
+        getDocs(query(reqRef, where("fromUserId", "==", user.uid))),
+        getDocs(
+          query(
+            conRef,
+            where("participants", "array-contains", user.uid),
+            where("status", "==", "connected")
+          )
+        ),
+        getDocs(
+          query(
+            conRef,
+            where("participants", "array-contains", user.uid),
+            where("status", "==", "accepted")
+          )
+        ),
+      ]);
+      const reqSet = new Set<string>();
+      outgoing.docs.forEach((d) =>
+        reqSet.add((d.data() as any)?.toUserId || "")
+      );
+      const conSet = new Set<string>();
+      [...acceptedA.docs, ...acceptedB.docs].forEach((d: any) => {
+        const arr = (d.data() as any)?.participants || [];
+        if (Array.isArray(arr))
+          arr.forEach((id: string) => {
+            if (id !== user.uid) conSet.add(id);
+          });
+      });
+      const next: Record<string, { requested: boolean; connected: boolean }> =
+        {};
+      for (const id of uids)
+        next[id] = { requested: reqSet.has(id), connected: conSet.has(id) };
+      setStatusByUser(next);
+    } catch {}
   };
 
   return (
@@ -194,42 +245,74 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <a
-                    href={`/dashboard/profile/${encodeURIComponent(m.userId)}`}
-                    className="text-xs underline"
-                  >
-                    View Profile
-                  </a>
                   <Button
                     size="sm"
-                    onClick={async () => {
-                      if (!user?.uid) {
-                        toast({
-                          title: "Sign in required",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-                      try {
-                        await fetch("/api/requests", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            fromUserId: user.uid,
-                            toUserId: m.userId,
-                          }),
-                        });
-                        toast({ title: "Request sent" });
-                      } catch {
-                        toast({
-                          title: "Failed to send request",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
+                    variant="ghost"
+                    onClick={() =>
+                      router.push(
+                        `/dashboard/profile/${encodeURIComponent(m.userId)}`
+                      )
+                    }
                   >
-                    Connect
+                    View Profile
                   </Button>
+                  {statusByUser[m.userId]?.connected ? (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        router.push(
+                          `/dashboard/messages?peer=${encodeURIComponent(
+                            m.userId
+                          )}`
+                        )
+                      }
+                    >
+                      Message
+                    </Button>
+                  ) : statusByUser[m.userId]?.requested ? (
+                    <Button size="sm" disabled>
+                      Requested
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        if (!user?.uid) {
+                          toast({
+                            title: "Sign in required",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        try {
+                          const res = await fetch("/api/requests", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              fromUserId: user.uid,
+                              toUserId: m.userId,
+                            }),
+                          });
+                          if (res.ok) {
+                            toast({ title: "Request sent" });
+                            updateStatuses([m.userId]);
+                          } else {
+                            toast({
+                              title: "Failed to send request",
+                              variant: "destructive",
+                            });
+                          }
+                        } catch {
+                          toast({
+                            title: "Failed to send request",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    >
+                      Connect
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
