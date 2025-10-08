@@ -5,6 +5,7 @@ import {
   cert,
 } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 // Initialize Admin SDK once per process
 const adminApp = getApps().length
@@ -27,3 +28,4 @@ const adminApp = getApps().length
     });
 
 export const adminDb = getFirestore(adminApp);
+export const adminStorage = getStorage(adminApp);

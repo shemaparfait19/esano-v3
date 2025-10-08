@@ -188,6 +188,10 @@ export function DnaUploadForm() {
         />
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Note: Upload text-like DNA exports (.txt/.csv). Max file size 10 MB.
+      </p>
+
       {file && (
         <div className="flex items-center justify-between p-3 border rounded-lg bg-background">
           <div className="flex items-center gap-3">
