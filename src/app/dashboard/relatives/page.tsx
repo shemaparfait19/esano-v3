@@ -244,6 +244,31 @@ export default function RelativesPage() {
           ))}
         </div>
       )}
+
+      {/* DNA Matches section retained below connected friends */}
+      {!isAnalyzing &&
+        analysisCompleted &&
+        relatives &&
+        relatives.length > 0 && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="font-headline text-2xl font-bold text-primary">
+                DNA Matches
+              </h2>
+              <p className="text-muted-foreground">
+                Potential relatives detected by your last analysis.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {relatives.map((relative, index) => (
+                <RelativeCard
+                  key={relative.userId || index}
+                  relative={relative as any}
+                />
+              ))}
+            </div>
+          </div>
+        )}
     </div>
   );
 }
