@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminDb, adminStorage } from "@/lib/firebase-admin";
+import { downloadDriveFile } from "@/lib/google-drive";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
       text: String(u.dnaData).slice(0, 200_000),
     }));
 
-    // Read a limited number of dna_data Storage files as text
+    // Read a limited number of dna_data files (Storage or Google Drive) as text
     const bucket = adminStorage.bucket();
     const storageCandidates: {
       userId: string;
@@ -51,11 +52,18 @@ export async function POST(req: Request) {
     }[] = [];
     for (const meta of all.slice(0, 25)) {
       try {
-        if (!meta.filePath) continue;
-        const [buf] = await bucket
-          .file(meta.filePath)
-          .download({ validation: false });
-        const asText = buf.toString("utf8").slice(0, 200_000);
+        let asText = "";
+        if (meta.backend === "gdrive" && meta.driveFileId) {
+          const buf = await downloadDriveFile(meta.driveFileId);
+          asText = buf.toString("utf8").slice(0, 200_000);
+        } else if (meta.filePath) {
+          const [buf] = await bucket
+            .file(meta.filePath)
+            .download({ validation: false });
+          asText = buf.toString("utf8").slice(0, 200_000);
+        } else {
+          continue;
+        }
         if (asText.length > 0) {
           storageCandidates.push({
             userId: meta.userId,
