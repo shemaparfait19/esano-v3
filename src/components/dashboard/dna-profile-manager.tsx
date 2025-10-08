@@ -81,6 +81,32 @@ export function DnaProfileManager() {
     }
   }
 
+  async function connectDrive() {
+    try {
+      if (!user) {
+        toast({
+          title: "Login required",
+          description: "Sign in first.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const resp = await fetch(
+        `/api/google/oauth?userId=${encodeURIComponent(user.uid)}`
+      );
+      const data = await resp.json();
+      if (!resp.ok || !data.url)
+        throw new Error(data?.error || "Failed to get auth URL");
+      window.location.href = data.url;
+    } catch (e: any) {
+      toast({
+        title: "Google Drive connect failed",
+        description: e?.message ?? "",
+        variant: "destructive",
+      });
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -92,10 +118,13 @@ export function DnaProfileManager() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div>
+        <div className="flex gap-2 flex-wrap">
           <Link href="/dashboard/dna-analysis" className="inline-block">
             <Button>Upload or Analyze DNA</Button>
           </Link>
+          <Button variant="outline" onClick={connectDrive}>
+            Connect Google Drive
+          </Button>
         </div>
 
         <div className="border-t pt-4">

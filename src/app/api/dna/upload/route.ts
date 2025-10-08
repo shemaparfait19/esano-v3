@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { adminDb, adminStorage } from "@/lib/firebase-admin";
 import { uploadToDrive } from "@/lib/google-drive";
+import { adminDb as db } from "@/lib/firebase-admin";
+import { driveClientWithTokens } from "@/lib/google-oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,11 +38,41 @@ export async function POST(req: Request) {
       );
     }
 
-    const preferDrive = Boolean(
+    // Prefer per-user OAuth tokens if available; else service account; else GCS
+    let userTokens: any | undefined;
+    try {
+      const tSnap = await db.collection("oauthTokens").doc(userId).get();
+      userTokens = tSnap.exists ? (tSnap.data() as any).googleDrive : undefined;
+    } catch {}
+    const preferUserDrive = Boolean(userTokens);
+    const preferServiceDrive = Boolean(
       process.env.GDRIVE_SERVICE_ACCOUNT_JSON && process.env.GDRIVE_FOLDER_ID
     );
 
-    if (preferDrive) {
+    if (preferUserDrive) {
+      const fileName = file.name || `dna_${Date.now()}.txt`;
+      const drive = driveClientWithTokens(userTokens);
+      const res: any = await drive.files.create({
+        requestBody: { name: fileName, mimeType: file.type || "text/plain" },
+        media: {
+          mimeType: file.type || "text/plain",
+          body: BufferToStream(buf) as any,
+        },
+        fields: "id, name, webViewLink",
+      });
+      const doc = {
+        userId,
+        fileName: res.data.name as string,
+        fileUrl: (res.data.webViewLink as string) || "",
+        driveFileId: res.data.id as string,
+        uploadDate: new Date().toISOString(),
+        fileSize: buf.byteLength,
+        status: "active" as const,
+        backend: "gdrive_user" as const,
+      };
+      await adminDb.collection("dna_data").add(doc);
+      return NextResponse.json({ ok: true, ...doc });
+    } else if (preferServiceDrive) {
       const fileName = file.name || `dna_${Date.now()}.txt`;
       const driveRes = await uploadToDrive({
         folderId: process.env.GDRIVE_FOLDER_ID as string,
@@ -56,7 +88,7 @@ export async function POST(req: Request) {
         uploadDate: new Date().toISOString(),
         fileSize: buf.byteLength,
         status: "active" as const,
-        backend: "gdrive" as const,
+        backend: "gdrive_service" as const,
       };
       await adminDb.collection("dna_data").add(doc);
       return NextResponse.json({ ok: true, ...doc });
@@ -93,4 +125,12 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+function BufferToStream(buffer: Buffer) {
+  const { Readable } = require("stream");
+  const stream = new Readable();
+  stream.push(buffer);
+  stream.push(null);
+  return stream;
 }
