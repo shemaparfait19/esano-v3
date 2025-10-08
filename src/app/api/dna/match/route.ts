@@ -255,22 +255,40 @@ function parseAndFilterSNPs(text: string): SNP[] {
       geno = genoStr;
     }
 
-    // Validate and normalize genotype
-    if (geno && /^[0-2][\/|][0-2]$/.test(geno)) {
-      const normalized = normalizeGenotype(geno);
-      if (normalized && pos > 0) {
-        const posKey = `${chr}-${pos}`;
-
-        // Skip duplicates
-        if (seenPositions.has(posKey)) continue;
-        seenPositions.add(posKey);
-
-        snps.push({
-          chr,
-          pos,
-          genotype: normalized,
-        });
+    // Validate and normalize genotype (supports numeric 0/1 and letter genotypes like AA/AG)
+    let normalized: [number, number] | null = null;
+    if (geno) {
+      if (/^[0-3][\/|][0-3]$/.test(geno)) {
+        normalized = normalizeGenotype(geno);
+      } else if (/^[ACGT]{2}$/i.test(geno)) {
+        const pair = lettersToGenotypePair(geno.toUpperCase());
+        normalized = pair;
+      } else if (/^[ACGT][\/|][ACGT]$/i.test(geno)) {
+        const letters = geno.replace("|", "/");
+        const [l1, l2] = letters.split("/");
+        const pair = lettersToGenotypePair((l1 + l2).toUpperCase());
+        normalized = pair;
+      } else if (parts.length >= 4 && /^[ACGT]{2}$/i.test(parts[3])) {
+        // 23andMe-like: rsid chr pos AA
+        chr = (parts[1] || "").replace("chr", "");
+        pos = parseInt(parts[2]);
+        const pair = lettersToGenotypePair(parts[3].toUpperCase());
+        normalized = pair;
       }
+    }
+
+    if (normalized && pos > 0) {
+      const posKey = `${chr}-${pos}`;
+
+      // Skip duplicates
+      if (seenPositions.has(posKey)) continue;
+      seenPositions.add(posKey);
+
+      snps.push({
+        chr,
+        pos,
+        genotype: normalized,
+      });
     }
   }
 
@@ -390,6 +408,17 @@ function normalizeGenotype(g: string): [number, number] | null {
   }
 
   // Return sorted alleles
+  return a <= b ? [a, b] : [b, a];
+}
+
+// Map letter genotypes (AA/AG/CC) to numeric pairs using REF/ALT-agnostic encoding:
+// A->0, C->1, G->2, T->3; sort for phase-agnostic comparison
+function lettersToGenotypePair(letters: string): [number, number] | null {
+  if (!letters || letters.length !== 2) return null;
+  const map: Record<string, number> = { A: 0, C: 1, G: 2, T: 3 };
+  const a = map[letters[0]];
+  const b = map[letters[1]];
+  if (a === undefined || b === undefined) return null;
   return a <= b ? [a, b] : [b, a];
 }
 
