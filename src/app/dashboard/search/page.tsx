@@ -15,6 +15,8 @@ import {
 import SearchInput from "@/components/search/search-input";
 import SearchResults from "@/components/search/search-results";
 import { getCachedSearchResult, cacheSearchResult } from "@/lib/search-cache";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface SearchResult {
   id: string;
@@ -158,6 +160,35 @@ export default function SearchPage() {
             connectionStatus: "none" as const,
           },
         }));
+
+        // Enrich with connection status for current user
+        try {
+          const conRef = collection(db, "connections");
+          const [conA, conB] = await Promise.all([
+            getDocs(
+              query(
+                conRef,
+                where("participants", "array-contains", user.uid),
+                where("status", "==", "connected")
+              )
+            ),
+            getDocs(query(conRef, where("status", "==", "connected"))),
+          ]);
+          const connectedSet = new Set<string>();
+          conA.docs.forEach((d) => {
+            const arr = ((d.data() as any)?.participants || []) as string[];
+            arr.forEach((id) => {
+              if (id !== user.uid) connectedSet.add(id);
+            });
+          });
+          // Mark connected in results
+          transformedResults.forEach((r: any) => {
+            if (connectedSet.has(r.id)) {
+              r.contactInfo.connectionStatus = "connected";
+              r.contactInfo.canConnect = false;
+            }
+          });
+        } catch {}
 
         const searchResponse = {
           results: transformedResults,
