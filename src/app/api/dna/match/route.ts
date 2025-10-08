@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { adminDb, adminStorage } from "@/lib/firebase-admin";
-import { downloadDriveFile } from "@/lib/google-drive";
+import { adminDb } from "@/lib/firebase-admin";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const process: any;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,81 +58,106 @@ export async function POST(req: Request) {
     // Fetch all active DNA files metadata
     const snap = await adminDb.collection("dna_data").get();
     const all = snap.docs
-      .map((d) => ({ id: d.id, ...(d.data() as any) }))
-      .filter((d) => d.status !== "removed");
+      .map((d: any) => ({ id: d.id, ...(d.data() as any) }))
+      .filter((d: any) => d.status !== "removed");
 
     // Fetch user profiles with DNA data
     const userDocs = await adminDb.collection("users").limit(100).get();
     const comparatorUsers = userDocs.docs
-      .filter((d) => d.id !== userId)
-      .map((d) => ({ id: d.id, ...(d.data() as any) }))
-      .filter((u) => typeof u.dnaData === "string" && u.dnaData.length > 0)
+      .filter((d: any) => d.id !== userId)
+      .map((d: any) => ({ id: d.id, ...(d.data() as any) }))
+      .filter((u: any) => typeof u.dnaData === "string" && u.dnaData.length > 0)
       .slice(0, 50);
 
-    const candidatesFromUsers = comparatorUsers.map((u) => ({
+    const candidatesFromUsers = comparatorUsers.map((u: any) => ({
       userId: u.id,
       fileName: u.dnaFileName || "user_dna.txt",
       text: String(u.dnaData),
     }));
 
-    // Read DNA data files
-    const bucket = adminStorage.bucket();
-    const storageCandidates: {
+    // Use only Firestore-resident text samples (no Drive/Storage reads)
+    const firestoreCandidates: {
       userId: string;
       fileName: string;
       text: string;
     }[] = [];
 
-    for (const meta of all.slice(0, 50)) {
+    for (const meta of all.slice(0, 200)) {
       try {
         if (meta.userId === userId) continue;
-        let asText =
+        const asText =
           typeof meta.textSample === "string" && meta.textSample.length > 0
             ? String(meta.textSample)
             : "";
-        // Only attempt remote fetch if textSample not present
-        if (!asText) {
-          if (
-            (meta.backend === "gdrive" ||
-              meta.backend === "gdrive_user" ||
-              meta.backend === "gdrive_service") &&
-            meta.driveFileId
-          ) {
-            try {
-              const buf = await downloadDriveFile(meta.driveFileId);
-              asText = buf.toString("utf8");
-            } catch {
-              // ignore drive permission errors
-            }
-          } else if (meta.filePath) {
-            try {
-              const [buf] = await bucket
-                .file(meta.filePath)
-                .download({ validation: false });
-              asText = buf.toString("utf8");
-            } catch {
-              // ignore storage errors
-            }
-          }
-        }
-
         if (asText.length > 0) {
-          storageCandidates.push({
+          firestoreCandidates.push({
             userId: meta.userId,
-            fileName: meta.fileName,
+            fileName: meta.fileName || "dna.txt",
             text: asText,
           });
         }
       } catch {}
     }
 
-    const candidates = [...candidatesFromUsers, ...storageCandidates];
+    const candidates = [...candidatesFromUsers, ...firestoreCandidates];
 
     if (candidates.length === 0) {
       return NextResponse.json({ matches: [] satisfies MatchOutput[] });
     }
 
-    // Analyze each candidate
+    // -------------------------------
+    // Gemini-first batch comparison
+    // -------------------------------
+    try {
+      const userPairs = toCompactPairs(userSNPs, 6000);
+      // Prepare up to 25 candidates for the Gemini request to keep payload small
+      const limited = candidates.slice(0, 25).map((c) => ({
+        userId: c.userId,
+        fileName: c.fileName,
+        pairs: toCompactPairs(parseAndFilterSNPs(c.text), 6000),
+      }));
+
+      const geminiMatches = await geminiCompare({
+        user: { userId, pairs: userPairs },
+        candidates: limited,
+      });
+
+      if (Array.isArray(geminiMatches) && geminiMatches.length > 0) {
+        // Map Gemini output into MatchOutput shape; metrics not provided by Gemini
+        const mapped = geminiMatches
+          .filter((m: any) => m && m.userId)
+          .map((m: any) => ({
+            userId: m.userId,
+            fileName:
+              limited.find((c) => c.userId === m.userId)?.fileName || "dna.txt",
+            relationship: String(m.relationship || "Possible relative"),
+            confidence: Math.max(0, Math.min(100, Number(m.confidence ?? 0))),
+            details: String(
+              m.details || "Computed by Gemini based on SNP concordance"
+            ),
+            metrics: {
+              totalSNPs: 0,
+              ibdSegments: 0,
+              totalIBD_cM: 0,
+              ibs0: 0,
+              ibs1: 0,
+              ibs2: 0,
+              kinshipCoefficient: 0,
+            },
+          }));
+
+        if (mapped.length > 0) {
+          return NextResponse.json({ matches: mapped.slice(0, 50) });
+        }
+      }
+    } catch (err) {
+      console.error(
+        "Gemini comparison failed; falling back to IBS matcher:",
+        err
+      );
+    }
+
+    // Analyze each candidate (deterministic fallback)
     const matches: MatchOutput[] = [];
 
     for (const candidate of candidates) {
@@ -255,6 +281,104 @@ function parseAndFilterSNPs(text: string): SNP[] {
     if (chrA !== chrB) return chrA - chrB;
     return a.pos - b.pos;
   });
+}
+
+// Convert SNPs to compact pairs expected by Gemini payload
+function toCompactPairs(
+  snps: SNP[],
+  max: number
+): Array<{ p: string; g: string }> {
+  const pairs: Array<{ p: string; g: string }> = [];
+  for (const s of snps) {
+    const g = `${s.genotype[0]}/${s.genotype[1]}`;
+    pairs.push({ p: `${s.chr}-${s.pos}`, g });
+    if (pairs.length >= max) break;
+  }
+  return pairs;
+}
+
+// Call Gemini to compare one user against multiple candidates
+async function geminiCompare(input: {
+  user: { userId: string; pairs: Array<{ p: string; g: string }> };
+  candidates: Array<{
+    userId: string;
+    fileName: string;
+    pairs: Array<{ p: string; g: string }>;
+  }>;
+}): Promise<any[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
+
+  const system = `You are a genomics matcher. Compare a user's SNP genotype pairs against multiple candidates. 
+Return STRICT JSON only with this shape (no prose):
+{"matches":[{"userId":"id","relationship":"Parent|Sibling|Cousin|Unrelated|...","confidence":0-100,"details":"short reasoning"}]}
+Rules:\n- Use concordance of genotype pairs at overlapping positions.\n- Favor closer relationships when concordance is high.\n- If insufficient overlap (<200 positions), either omit or mark as low confidence.\n- Do NOT invent fields. Do NOT include markdown.`;
+
+  const payload = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text:
+              system +
+              "\n\nINPUT JSON (analyze and reply with only the output JSON):\n" +
+              JSON.stringify(
+                {
+                  user: input.user,
+                  candidates: input.candidates,
+                },
+                null,
+                0
+              ),
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      topP: 0.9,
+      topK: 40,
+      maxOutputTokens: 2048,
+    },
+  } as any;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      }
+    );
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const json = extractJson(text);
+    if (!json || !Array.isArray(json.matches)) return [];
+    return json.matches;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function extractJson(s: string): any | null {
+  if (!s) return null;
+  try {
+    // Try direct parse first
+    return JSON.parse(s);
+  } catch {}
+  // Try to find JSON block in text
+  const match = s.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
 }
 
 function normalizeGenotype(g: string): [number, number] | null {
