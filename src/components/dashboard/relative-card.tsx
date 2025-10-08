@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Dna, Link2, ExternalLink } from "lucide-react";
+import { Dna, Link2, ExternalLink } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Progress } from "../ui/progress";
 
@@ -81,8 +81,8 @@ export function RelativeCard({ relative }: RelativeCardProps) {
           </div>
         )}
       </CardContent>
-      <CardFooter className="flex gap-3">
-        <Button asChild variant="secondary" className="flex-1">
+      <CardFooter>
+        <Button asChild variant="secondary" className="w-full">
           <a
             href={`/dashboard/profile?userId=${encodeURIComponent(
               relative.userId
@@ -90,31 +90,6 @@ export function RelativeCard({ relative }: RelativeCardProps) {
           >
             <ExternalLink className="mr-2 h-4 w-4" /> View Profile
           </a>
-        </Button>
-        <Button
-          className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
-          onClick={async () => {
-            try {
-              // @ts-ignore useAuth typing
-              const { user } = (
-                await import("@/contexts/auth-context")
-              ).useAuth();
-            } catch {}
-            try {
-              const res = await fetch("/api/requests", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  fromUserId: undefined,
-                  toUserId: relative.userId,
-                }),
-              });
-              // Silently ignore result; notifications UI will reflect
-            } catch {}
-          }}
-        >
-          <UserPlus className="mr-2 h-4 w-4" />
-          Request Connection
         </Button>
       </CardFooter>
     </Card>
