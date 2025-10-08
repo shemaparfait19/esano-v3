@@ -368,6 +368,11 @@ export default function SearchPage() {
           onClear={handleClear}
           isLoading={isLoading}
           className="max-w-2xl mx-auto"
+          defaultValue={
+            new URLSearchParams(
+              typeof window !== "undefined" ? window.location.search : ""
+            ).get("q") || ""
+          }
         />
       </div>
 

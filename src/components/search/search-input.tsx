@@ -11,6 +11,7 @@ interface SearchInputProps {
   isLoading?: boolean;
   placeholder?: string;
   className?: string;
+  defaultValue?: string;
 }
 
 export default function SearchInput({
@@ -19,9 +20,18 @@ export default function SearchInput({
   isLoading = false,
   placeholder = "Search for family members... (e.g., 'Uwimana Musanze')",
   className = "",
+  defaultValue,
 }: SearchInputProps) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  // Initialize from defaultValue (e.g., ?q=...)
+  useEffect(() => {
+    if (defaultValue && defaultValue.trim().length > 0) {
+      setQuery(defaultValue);
+      setDebouncedQuery(defaultValue);
+    }
+  }, [defaultValue]);
 
   // Debounce the search query (500ms for quota-friendly searching)
   useEffect(() => {
