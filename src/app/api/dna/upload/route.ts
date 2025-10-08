@@ -72,8 +72,23 @@ export async function POST(req: Request) {
         backend: "gdrive_user" as const,
         textSample,
       };
-      await adminDb.collection("dna_data").add(doc);
-      return NextResponse.json({ ok: true, ...doc });
+      const savedRef = await adminDb.collection("dna_data").add(doc);
+      // Also persist normalized text to the user's profile for fast matching
+      try {
+        await adminDb
+          .collection("users")
+          .doc(userId)
+          .set(
+            {
+              userId,
+              dnaData: textSample,
+              dnaFileName: res.data.name as string,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+      } catch {}
+      return NextResponse.json({ ok: true, id: savedRef.id, ...doc });
     } else if (preferServiceDrive) {
       const fileName = file.name || `dna_${Date.now()}.txt`;
       const driveRes = await uploadToDrive({
@@ -94,8 +109,19 @@ export async function POST(req: Request) {
         backend: "gdrive_service" as const,
         textSample,
       };
-      await adminDb.collection("dna_data").add(doc);
-      return NextResponse.json({ ok: true, ...doc });
+      const savedRef = await adminDb.collection("dna_data").add(doc);
+      try {
+        await adminDb.collection("users").doc(userId).set(
+          {
+            userId,
+            dnaData: textSample,
+            dnaFileName: driveRes.name,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch {}
+      return NextResponse.json({ ok: true, id: savedRef.id, ...doc });
     } else {
       const bucket = adminStorage.bucket();
       const fileName = file.name || `dna_${Date.now()}.txt`;
@@ -122,8 +148,19 @@ export async function POST(req: Request) {
         backend: "gcs" as const,
         textSample,
       };
-      await adminDb.collection("dna_data").add(doc);
-      return NextResponse.json({ ok: true, ...doc });
+      const savedRef = await adminDb.collection("dna_data").add(doc);
+      try {
+        await adminDb.collection("users").doc(userId).set(
+          {
+            userId,
+            dnaData: textSample,
+            dnaFileName: fileName,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch {}
+      return NextResponse.json({ ok: true, id: savedRef.id, ...doc });
     }
   } catch (e: any) {
     return NextResponse.json(
