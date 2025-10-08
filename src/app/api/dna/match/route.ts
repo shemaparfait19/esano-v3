@@ -124,6 +124,24 @@ OTHER_DNA:\n${candidates
       } catch {}
     }
 
+    // Fallback: deterministic IBS matching using saved text samples
+    if (matches.length === 0) {
+      const userMap = parseGenotypes(String(dnaText).slice(0, 200_000));
+      const computed: MatchOutput[] = candidates.map((c) => {
+        const otherMap = parseGenotypes(c.text);
+        const { ibsSharing } = computeIbs(userMap, otherMap);
+        return {
+          userId: c.userId,
+          fileName: c.fileName,
+          relationship: estimateRelationship(ibsSharing),
+          confidence: Math.round(ibsSharing),
+          details: `IBS sharing ${ibsSharing.toFixed(2)}%`,
+        };
+      });
+      // Filter low-confidence
+      matches = computed.filter((m) => m.confidence >= 55).slice(0, 20);
+    }
+
     return NextResponse.json({ matches: matches || [] });
   } catch (e: any) {
     return NextResponse.json(
@@ -131,4 +149,69 @@ OTHER_DNA:\n${candidates
       { status: 500 }
     );
   }
+}
+
+// === Simple SNP parser and IBS calculator ===
+function parseGenotypes(text: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  const lines = text.split(/\r?\n/);
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    // Accept formats like: chr1-69511 0/1  OR  chr1 69511 0/1
+    const bySpace = t.split(/\s+/);
+    if (bySpace.length >= 2) {
+      if (bySpace[0].includes("-")) {
+        const [pos, geno] = [bySpace[0], bySpace[1]];
+        if (geno && /^(0|1)[\/|](0|1)$/.test(geno))
+          map[pos] = normalizeGeno(geno);
+      } else if (bySpace.length >= 3) {
+        const pos = `${bySpace[0]}-${bySpace[1]}`;
+        const geno = bySpace[2];
+        if (geno && /^(0|1)[\/|](0|1)$/.test(geno))
+          map[pos] = normalizeGeno(geno);
+      }
+    } else if (t.includes(":")) {
+      // rsID:geno fallback e.g., rs123:0/1
+      const [pos, geno] = t.split(":");
+      if (geno && /^(0|1)[\/|](0|1)$/.test(geno))
+        map[pos] = normalizeGeno(geno);
+    }
+  }
+  return map;
+}
+
+function normalizeGeno(g: string): string {
+  const [a, b] = g.replace("|", "/").split("/");
+  return [a, b].sort().join("/");
+}
+
+function computeIbs(a: Record<string, string>, b: Record<string, string>) {
+  let ibs0 = 0,
+    ibs1 = 0,
+    ibs2 = 0,
+    total = 0;
+  for (const pos in a) {
+    const ga = a[pos];
+    const gb = b[pos];
+    if (!gb) continue;
+    total++;
+    const [a1, a2] = ga.split("/");
+    const [b1, b2] = gb.split("/");
+    const shared = [a1, a2].filter((x) => x === b1 || x === b2).length;
+    if (shared === 0) ibs0++;
+    else if (shared === 1 || ga !== gb) ibs1++;
+    else ibs2++;
+  }
+  const ibsSharing = total > 0 ? ((ibs1 * 0.5 + ibs2) / total) * 100 : 0;
+  return { ibs0, ibs1, ibs2, total, ibsSharing };
+}
+
+function estimateRelationship(ibsSharing: number): string {
+  if (ibsSharing > 99) return "Identical twins";
+  if (ibsSharing >= 75) return "Parent-child or full siblings";
+  if (ibsSharing >= 62.5) return "Half-siblings or grandparent-grandchild";
+  if (ibsSharing >= 56.25) return "First cousins";
+  if (ibsSharing >= 53) return "Second cousins";
+  return "Distant or unrelated";
 }
