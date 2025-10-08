@@ -218,14 +218,23 @@ export async function POST(req: Request) {
       }
     }
 
-    // Sort by kinship coefficient (most related first)
-    matches.sort(
-      (a, b) => b.metrics.kinshipCoefficient - a.metrics.kinshipCoefficient
-    );
+    // Deduplicate by userId keeping highest confidence
+    const bestByUser = new Map<string, MatchOutput>();
+    for (const m of matches) {
+      const prev = bestByUser.get(m.userId);
+      if (!prev || m.confidence > prev.confidence) bestByUser.set(m.userId, m);
+    }
+    const uniqueMatches = Array.from(bestByUser.values());
+
+    // Sort by confidence then kinship coefficient
+    uniqueMatches.sort((a, b) => {
+      if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+      return b.metrics.kinshipCoefficient - a.metrics.kinshipCoefficient;
+    });
 
     // Return top 50 matches
     return NextResponse.json({
-      matches: matches.slice(0, 50),
+      matches: uniqueMatches.slice(0, 50),
       _diag: _diagBase,
     });
   } catch (e: any) {
