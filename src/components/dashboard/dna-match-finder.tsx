@@ -28,6 +28,7 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   const [dnaTextInput, setDnaTextInput] = useState("");
+  const [diag, setDiag] = useState<any | null>(null);
 
   const onFind = async () => {
     const hasText = dnaTextInput && dnaTextInput.trim().length > 0;
@@ -58,6 +59,7 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
         body: JSON.stringify({ userId, dnaText }),
       });
       const data = await resp.json();
+      setDiag(data?._diag || null);
       if (!resp.ok) throw new Error(data?.error || "Match failed");
       setMatches(Array.isArray(data.matches) ? data.matches : []);
       // Persist matches to profile so Relatives page shows them
@@ -137,6 +139,27 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
             </div>
           </div>
         </div>
+
+        {diag && (
+          <div className="rounded border p-3 text-xs text-muted-foreground space-y-1">
+            <div>
+              Seen SNPs: {diag.userSnps} | Candidates: {diag.candidatesCount}
+            </div>
+            {Array.isArray(diag.sampleCandidates) &&
+              diag.sampleCandidates.length > 0 && (
+                <div>
+                  Samples:
+                  <ul className="list-disc ml-4">
+                    {diag.sampleCandidates.map((c: any, i: number) => (
+                      <li key={i}>
+                        {c.userId} • {c.fileName} • len {c.textLen}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+          </div>
+        )}
 
         {matches.length > 0 && (
           <div className="border-t pt-4 space-y-3">

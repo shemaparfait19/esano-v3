@@ -100,6 +100,15 @@ export async function POST(req: Request) {
     }
 
     const candidates = [...candidatesFromUsers, ...firestoreCandidates];
+    const _diagBase: any = {
+      userSnps: userSNPs.length,
+      candidatesCount: candidates.length,
+      sampleCandidates: candidates.slice(0, 5).map((c) => ({
+        userId: c.userId,
+        fileName: c.fileName,
+        textLen: c.text?.length || 0,
+      })),
+    };
 
     if (candidates.length === 0) {
       return NextResponse.json({ matches: [] satisfies MatchOutput[] });
@@ -147,7 +156,10 @@ export async function POST(req: Request) {
           }));
 
         if (mapped.length > 0) {
-          return NextResponse.json({ matches: mapped.slice(0, 50) });
+          return NextResponse.json({
+            matches: mapped.slice(0, 50),
+            _diag: _diagBase,
+          });
         }
       }
     } catch (err) {
@@ -191,7 +203,10 @@ export async function POST(req: Request) {
     );
 
     // Return top 50 matches
-    return NextResponse.json({ matches: matches.slice(0, 50) });
+    return NextResponse.json({
+      matches: matches.slice(0, 50),
+      _diag: _diagBase,
+    });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message ?? "Failed to match DNA" },
