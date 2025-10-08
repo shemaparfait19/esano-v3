@@ -43,7 +43,7 @@ function RequesterName({ userId }: { userId: string }) {
       ignore = true;
     };
   }, [userId]);
-  return <>{name || userId}</>;
+  return <>{name || userId.substring(0, 6)}</>;
 }
 
 export function DashboardHeader() {

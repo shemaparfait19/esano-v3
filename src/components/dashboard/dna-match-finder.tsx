@@ -75,17 +75,7 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
       const list = Array.isArray(data.matches) ? data.matches : [];
       setMatches(list);
       updateStatuses(list.map((m: any) => m.userId));
-      // Persist matches to profile so Relatives page shows them
-      try {
-        await fetch("/api/dna/save-matches", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId,
-            matches: Array.isArray(data.matches) ? data.matches : [],
-          }),
-        });
-      } catch {}
+      // Do not persist matches automatically; keep results on this page only
       if (!data.matches || data.matches.length === 0) {
         toast({
           title: "No matches found",

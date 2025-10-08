@@ -1,15 +1,56 @@
-'use client';
+"use client";
 
-import { useAppContext } from '@/contexts/app-context';
-import { RelativeCard } from '@/components/dashboard/relative-card';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dna, Users, Frown } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useAppContext } from "@/contexts/app-context";
+import { RelativeCard } from "@/components/dashboard/relative-card";
+import { useAuth } from "@/contexts/auth-context";
+import { useEffect, useState } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Dna, Users, Frown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function RelativesPage() {
   const { relatives, isAnalyzing, analysisCompleted } = useAppContext();
+  const { user } = useAuth() as any;
+  const [connectedIds, setConnectedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function load() {
+      if (!user?.uid) return;
+      try {
+        const conRef = collection(db, "connections");
+        const snap = await getDocs(
+          query(
+            conRef,
+            where("participants", "array-contains", user.uid),
+            where("status", "==", "connected")
+          )
+        );
+        const ids = new Set<string>();
+        snap.docs.forEach((d) => {
+          const arr = ((d.data() as any)?.participants || []) as string[];
+          arr.forEach((id) => {
+            if (id !== user.uid) ids.add(id);
+          });
+        });
+        if (!ignore) setConnectedIds(Array.from(ids));
+      } catch {}
+    }
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [user?.uid]);
 
   return (
     <div className="space-y-8">
@@ -24,21 +65,21 @@ export default function RelativesPage() {
 
       {isAnalyzing && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-                 <Card key={i}>
-                    <CardHeader className="flex flex-row items-center gap-4">
-                        <Skeleton className="h-12 w-12 rounded-full" />
-                        <div className="space-y-2 flex-1">
-                            <Skeleton className="h-4 w-3/4" />
-                            <Skeleton className="h-3 w-1/2" />
-                        </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Skeleton className="h-4 w-full" />
-                         <Skeleton className="h-10 w-1/3" />
-                    </CardContent>
-                 </Card>
-            ))}
+          {[...Array(6)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-10 w-1/3" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -63,24 +104,38 @@ export default function RelativesPage() {
         </Card>
       )}
 
-      {!isAnalyzing && analysisCompleted && (!relatives || relatives.length === 0) && (
-         <Card className="text-center">
+      {!isAnalyzing &&
+        analysisCompleted &&
+        (!relatives || relatives.length === 0) && (
+          <Card className="text-center">
             <CardHeader>
-                <div className="mx-auto bg-secondary p-3 rounded-full w-fit">
-                    <Frown className="h-8 w-8 text-secondary-foreground" />
-                </div>
-                <CardTitle className="font-headline text-2xl mt-4">No Matches Found Yet</CardTitle>
-                <CardDescription>
-                    We couldn't find any relatives in our database at this time. As more users join, you may get new matches.
-                </CardDescription>
+              <div className="mx-auto bg-secondary p-3 rounded-full w-fit">
+                <Frown className="h-8 w-8 text-secondary-foreground" />
+              </div>
+              <CardTitle className="font-headline text-2xl mt-4">
+                No Matches Found Yet
+              </CardTitle>
+              <CardDescription>
+                We couldn't find any relatives in our database at this time. As
+                more users join, you may get new matches.
+              </CardDescription>
             </CardHeader>
-         </Card>
-      )}
+          </Card>
+        )}
 
-      {!isAnalyzing && analysisCompleted && relatives && relatives.length > 0 && (
+      {!isAnalyzing && connectedIds.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {relatives.map((relative, index) => (
-            <RelativeCard key={relative.userId || index} relative={relative} />
+          {connectedIds.map((uid) => (
+            <RelativeCard
+              key={uid}
+              relative={
+                {
+                  userId: uid,
+                  predictedRelationship: "Connected",
+                  relationshipProbability: 1,
+                } as any
+              }
+            />
           ))}
         </div>
       )}

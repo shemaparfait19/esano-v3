@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,9 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/auth-context";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 interface SearchResult {
   id: string;
@@ -51,14 +54,27 @@ export default function ResultCard({
 }: ResultCardProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuth() as any;
   const [isConnecting, setIsConnecting] = useState(false);
+  const [status, setStatus] = useState<"none" | "pending" | "connected">(
+    result.contactInfo?.connectionStatus || "none"
+  );
 
   const handleConnect = async () => {
-    if (!onConnect || !result.contactInfo?.canConnect) return;
-
+    if (result.type !== "user") return;
+    if (!user?.uid) {
+      toast({ title: "Sign in required", variant: "destructive" });
+      return;
+    }
     setIsConnecting(true);
     try {
-      await onConnect(result.id);
+      const resp = await fetch("/api/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromUserId: user.uid, toUserId: result.id }),
+      });
+      if (!resp.ok) throw new Error("send failed");
+      setStatus("pending");
       toast({
         title: "Connection request sent!",
         description: `Your request has been sent to ${result.name}`,
@@ -81,10 +97,7 @@ export default function ResultCard({
   };
 
   const handleMessage = () => {
-    if (
-      result.type === "user" &&
-      result.contactInfo?.connectionStatus === "connected"
-    ) {
+    if (result.type === "user" && status === "connected") {
       router.push(`/dashboard/messages?peer=${result.id}`);
     }
   };
@@ -117,6 +130,53 @@ export default function ResultCard({
         return "Connect";
     }
   };
+
+  useEffect(() => {
+    if (result.type !== "user" || !user?.uid) return;
+    let ignore = false;
+    async function load() {
+      try {
+        const reqRef = collection(db, "connectionRequests");
+        const conRef = collection(db, "connections");
+        const [outgoing, connectedA, connectedB] = await Promise.all([
+          getDocs(
+            query(
+              reqRef,
+              where("fromUserId", "==", user.uid),
+              where("toUserId", "==", result.id),
+              where("status", "==", "pending")
+            )
+          ),
+          getDocs(
+            query(
+              conRef,
+              where("participants", "array-contains", user.uid),
+              where("status", "==", "connected")
+            )
+          ),
+          getDocs(
+            query(
+              conRef,
+              where("participants", "array-contains", result.id),
+              where("status", "==", "connected")
+            )
+          ),
+        ]);
+        const isPending = outgoing.size > 0;
+        const isConnected =
+          connectedA.docs.some((d) => {
+            const arr = ((d.data() as any)?.participants || []) as string[];
+            return Array.isArray(arr) && arr.includes(result.id);
+          }) || connectedB.size > 0;
+        if (!ignore)
+          setStatus(isConnected ? "connected" : isPending ? "pending" : "none");
+      } catch {}
+    }
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [user?.uid, result.type, result.id]);
 
   return (
     <Card className={`hover:shadow-md transition-shadow ${className}`}>
@@ -209,45 +269,38 @@ export default function ResultCard({
                 </Button>
               )}
 
-              {result.type === "user" &&
-                result.contactInfo?.connectionStatus === "connected" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleMessage}
-                    className="flex items-center gap-1"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    Message
-                  </Button>
-                )}
+              {result.type === "user" && status === "connected" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleMessage}
+                  className="flex items-center gap-1"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Message
+                </Button>
+              )}
 
-              {result.type === "user" && result.contactInfo?.canConnect && (
+              {result.type === "user" && status !== "connected" && (
                 <Button
                   size="sm"
                   onClick={handleConnect}
                   disabled={isConnecting}
                   className="flex items-center gap-1"
                 >
-                  {getConnectionStatusIcon(result.contactInfo.connectionStatus)}
+                  {getConnectionStatusIcon(status)}
                   {isConnecting
                     ? "Sending..."
-                    : getConnectionStatusText(
-                        result.contactInfo.connectionStatus
-                      )}
+                    : getConnectionStatusText(status)}
                 </Button>
               )}
 
-              {result.type === "user" &&
-                result.contactInfo?.connectionStatus === "pending" && (
-                  <Badge
-                    variant="secondary"
-                    className="flex items-center gap-1"
-                  >
-                    <Clock className="h-3 w-3" />
-                    Request Pending
-                  </Badge>
-                )}
+              {result.type === "user" && status === "pending" && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Request Pending
+                </Badge>
+              )}
             </div>
           </div>
         </div>
