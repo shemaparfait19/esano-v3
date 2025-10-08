@@ -3,9 +3,10 @@ import { google } from "googleapis";
 export function getOAuthClient() {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const redirectUri = `${
+  const base = (
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002"
-  }/api/google/oauth/callback`;
+  ).replace(/\/+$/g, "");
+  const redirectUri = `${base}/api/google/oauth/callback`;
   if (!clientId || !clientSecret) throw new Error("Missing Google OAuth envs");
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
