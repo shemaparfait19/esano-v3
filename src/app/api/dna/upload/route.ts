@@ -60,7 +60,7 @@ export async function POST(req: Request) {
         },
         fields: "id, name, webViewLink",
       });
-      const textSample = buf.toString("utf8").slice(0, 200_000);
+      const textSample = buf.toString("utf8").slice(0, 1_000_000);
       const doc = {
         userId,
         fileName: res.data.name as string,
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
         mimeType: file.type || "text/plain",
         data: buf,
       });
-      const textSample = buf.toString("utf8").slice(0, 200_000);
+      const textSample = buf.toString("utf8").slice(0, 1_000_000);
       const doc = {
         userId,
         fileName: driveRes.name,
