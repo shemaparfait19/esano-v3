@@ -164,7 +164,7 @@ export async function POST(req: Request) {
       try {
         const candidateSNPs = parseAndFilterSNPs(candidate.text);
 
-        if (candidateSNPs.length < 1000) continue;
+        if (candidateSNPs.length < 200) continue;
 
         // Perform comprehensive kinship analysis
         const analysis = analyzeKinship(userSNPs, candidateSNPs);
@@ -431,7 +431,7 @@ function analyzeKinship(snps1: SNP[], snps2: SNP[]) {
     }
   }
 
-  if (overlapping.length < 1000) {
+  if (overlapping.length < 200) {
     return {
       relationship: "Insufficient overlap",
       confidence: 0,
