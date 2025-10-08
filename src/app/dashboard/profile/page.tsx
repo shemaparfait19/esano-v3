@@ -24,7 +24,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { saveUserDna, analyzeDna } from "@/app/actions";
 import { DnaProfileManager } from "@/components/dashboard/dna-profile-manager";
-import { DnaProfileManager } from "@/components/dashboard/dna-profile-manager";
 import {
   User,
   Calendar,
