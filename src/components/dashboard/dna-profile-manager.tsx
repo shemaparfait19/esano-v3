@@ -10,9 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Dna, Trash2, UploadCloud } from "lucide-react";
+import { Dna, Trash2 } from "lucide-react";
+import Link from "next/link";
 
 type DnaItem = {
   id: string;
@@ -92,7 +92,11 @@ export function DnaProfileManager() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Upload input has been moved to DNA Analysis page */}
+        <div>
+          <Link href="/dashboard/dna-analysis" className="inline-block">
+            <Button>Upload or Analyze DNA</Button>
+          </Link>
+        </div>
 
         <div className="border-t pt-4">
           {loading ? (
