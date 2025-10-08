@@ -92,18 +92,34 @@ export async function POST(req: Request) {
     for (const meta of all.slice(0, 50)) {
       try {
         if (meta.userId === userId) continue;
-        let asText = "";
-
-        if (meta.textSample && meta.textSample.length > 0) {
-          asText = String(meta.textSample);
-        } else if (meta.backend === "gdrive" && meta.driveFileId) {
-          const buf = await downloadDriveFile(meta.driveFileId);
-          asText = buf.toString("utf8");
-        } else if (meta.filePath) {
-          const [buf] = await bucket
-            .file(meta.filePath)
-            .download({ validation: false });
-          asText = buf.toString("utf8");
+        let asText =
+          typeof meta.textSample === "string" && meta.textSample.length > 0
+            ? String(meta.textSample)
+            : "";
+        // Only attempt remote fetch if textSample not present
+        if (!asText) {
+          if (
+            (meta.backend === "gdrive" ||
+              meta.backend === "gdrive_user" ||
+              meta.backend === "gdrive_service") &&
+            meta.driveFileId
+          ) {
+            try {
+              const buf = await downloadDriveFile(meta.driveFileId);
+              asText = buf.toString("utf8");
+            } catch {
+              // ignore drive permission errors
+            }
+          } else if (meta.filePath) {
+            try {
+              const [buf] = await bucket
+                .file(meta.filePath)
+                .download({ validation: false });
+              asText = buf.toString("utf8");
+            } catch {
+              // ignore storage errors
+            }
+          }
         }
 
         if (asText.length > 0) {
