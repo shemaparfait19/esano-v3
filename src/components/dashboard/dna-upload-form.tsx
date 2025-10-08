@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { analyzeDna } from "@/app/actions";
+// import { analyzeDna } from "@/app/actions";
 import { useAppContext } from "@/contexts/app-context";
 import { UploadCloud, File, Loader2, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,13 +23,7 @@ export function DnaUploadForm() {
   const { toast } = useToast();
   const router = useRouter();
   const { user } = useAuth();
-  const {
-    setRelatives,
-    setAncestry,
-    setInsights,
-    setIsAnalyzing,
-    setAnalysisCompleted,
-  } = useAppContext();
+  const { setIsAnalyzing, setAnalysisCompleted } = useAppContext();
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleFileChange = (selectedFile: File | null) => {
@@ -101,30 +95,20 @@ export function DnaUploadForm() {
         }
 
         // Read file contents
-        const dnaText = await file.text();
-        const trimmed = dnaText.trim();
-        if (!trimmed) {
-          throw new Error("The selected file appears to be empty.");
-        }
-
-        // Cap extremely long inputs to protect prompt & bandwidth
-        const maxChars = 200_000; // ~200KB of text
-        const safeDnaData =
-          trimmed.length > maxChars ? trimmed.slice(0, maxChars) : trimmed;
-
-        const results = await analyzeDna(user.uid, safeDnaData, file.name);
-
-        setRelatives(results.relatives);
-        setAncestry(results.ancestry);
-        setInsights(results.insights);
-        setAnalysisCompleted(true);
-
-        toast({
-          title: "Analysis Complete",
-          description: "Your DNA has been analyzed. Explore your results!",
-          variant: "default",
+        // Save raw file to Storage via API (do not analyze here)
+        const fd = new FormData();
+        fd.set("userId", user.uid);
+        fd.set("file", file);
+        const resp = await fetch("/api/dna/upload", {
+          method: "POST",
+          body: fd,
         });
-        router.push("/dashboard/relatives");
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data?.error || "Upload failed");
+        }
+        setAnalysisCompleted(false);
+        toast({ title: "DNA file saved", description: data.fileName });
       } catch (error) {
         toast({
           title: "Analysis Failed",
@@ -223,10 +207,10 @@ export function DnaUploadForm() {
         {isPending ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Analyzing...
+            Uploading...
           </>
         ) : (
-          "Start Analysis"
+          "Upload & Save"
         )}
       </Button>
     </div>

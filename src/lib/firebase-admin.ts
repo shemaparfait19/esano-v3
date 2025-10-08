@@ -25,6 +25,9 @@ const adminApp = getApps().length
         }
         return applicationDefault();
       })(),
+      storageBucket:
+        process.env.FIREBASE_STORAGE_BUCKET ||
+        "esano-ai-genealogy-explorer.appspot.com",
     });
 
 export const adminDb = getFirestore(adminApp);
