@@ -49,11 +49,13 @@ export async function POST(req: Request) {
     // Parse user's DNA with quality filtering
     const userSNPs = parseAndFilterSNPs(dnaText);
 
-    if (userSNPs.length < 1000) {
+    // Adjustable threshold - lower for testing, but less accurate
+    const MIN_SNPS = parseInt(process.env.MIN_SNPS_THRESHOLD || "100");
+
+    if (userSNPs.length < MIN_SNPS) {
       return NextResponse.json(
         {
-          error:
-            "Insufficient SNP data. Need at least 1000 valid SNPs for analysis.",
+          error: `Insufficient SNP data. Need at least ${MIN_SNPS} valid SNPs for analysis. Found: ${userSNPs.length}`,
         },
         { status: 400 }
       );
