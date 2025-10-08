@@ -9,8 +9,31 @@ type MatchOutput = {
   userId: string;
   fileName: string;
   relationship: string;
-  confidence: number; // 0..100
-  details?: string;
+  confidence: number;
+  details: string;
+  metrics: {
+    totalSNPs: number;
+    ibdSegments: number;
+    totalIBD_cM: number;
+    ibs0: number;
+    ibs1: number;
+    ibs2: number;
+    kinshipCoefficient: number;
+  };
+};
+
+type SNP = {
+  chr: string;
+  pos: number;
+  genotype: [number, number]; // normalized [0,0], [0,1], [1,1]
+};
+
+type IBDSegment = {
+  chr: string;
+  startPos: number;
+  endPos: number;
+  lengthCM: number;
+  snpCount: number;
 };
 
 export async function POST(req: Request) {
@@ -23,13 +46,26 @@ export async function POST(req: Request) {
       );
     }
 
+    // Parse user's DNA with quality filtering
+    const userSNPs = parseAndFilterSNPs(dnaText);
+
+    if (userSNPs.length < 1000) {
+      return NextResponse.json(
+        {
+          error:
+            "Insufficient SNP data. Need at least 1000 valid SNPs for analysis.",
+        },
+        { status: 400 }
+      );
+    }
+
     // Fetch all active DNA files metadata
     const snap = await adminDb.collection("dna_data").get();
     const all = snap.docs
       .map((d) => ({ id: d.id, ...(d.data() as any) }))
       .filter((d) => d.status !== "removed");
 
-    // For demo: fetch up to N user profiles with dnaData text (legacy stored)
+    // Fetch user profiles with DNA data
     const userDocs = await adminDb.collection("users").limit(100).get();
     const comparatorUsers = userDocs.docs
       .filter((d) => d.id !== userId)
@@ -40,30 +76,34 @@ export async function POST(req: Request) {
     const candidatesFromUsers = comparatorUsers.map((u) => ({
       userId: u.id,
       fileName: u.dnaFileName || "user_dna.txt",
-      text: String(u.dnaData).slice(0, 200_000),
+      text: String(u.dnaData),
     }));
 
-    // Read a limited number of dna_data files (Storage or Google Drive) as text
+    // Read DNA data files
     const bucket = adminStorage.bucket();
     const storageCandidates: {
       userId: string;
       fileName: string;
       text: string;
     }[] = [];
-    for (const meta of all.slice(0, 25)) {
+
+    for (const meta of all.slice(0, 50)) {
       try {
+        if (meta.userId === userId) continue;
         let asText = "";
-        if (meta.backend === "gdrive" && meta.driveFileId) {
+
+        if (meta.textSample && meta.textSample.length > 0) {
+          asText = String(meta.textSample);
+        } else if (meta.backend === "gdrive" && meta.driveFileId) {
           const buf = await downloadDriveFile(meta.driveFileId);
-          asText = buf.toString("utf8").slice(0, 200_000);
+          asText = buf.toString("utf8");
         } else if (meta.filePath) {
           const [buf] = await bucket
             .file(meta.filePath)
             .download({ validation: false });
-          asText = buf.toString("utf8").slice(0, 200_000);
-        } else {
-          continue;
+          asText = buf.toString("utf8");
         }
+
         if (asText.length > 0) {
           storageCandidates.push({
             userId: meta.userId,
@@ -80,69 +120,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ matches: [] satisfies MatchOutput[] });
     }
 
-    // Build prompt for Gemini comparison across candidates
-    const prompt = `You are an expert in genetic kinship analysis. Given one USER_DNA string and a list of OTHER_DNA entries with userId and fileName, estimate the most likely relationship for each entry (parent, child, sibling, grandparent, grandchild, aunt/uncle, niece/nephew, cousin, distant, no relation) and a confidence 0-100.
-Return strict JSON array. Each item: { userId, fileName, relationship, confidence, details }.
+    // Analyze each candidate
+    const matches: MatchOutput[] = [];
 
-USER_DNA:\n${String(dnaText).slice(0, 120000)}
-
-OTHER_DNA:\n${candidates
-      .map(
-        (c, i) =>
-          `#${i + 1} userId=${c.userId} fileName=${c.fileName}\n${c.text.slice(
-            0,
-            12000
-          )}`
-      )
-      .join("\n\n")}`;
-
-    // Call Gemini directly (keep consistent with assistant route)
-    let matches: MatchOutput[] = [];
-    if (process.env.GEMINI_API_KEY) {
+    for (const candidate of candidates) {
       try {
-        const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { maxOutputTokens: 800, temperature: 0.2 },
-            }),
-          }
-        );
-        if (resp.ok) {
-          const data = await resp.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          if (text) {
-            try {
-              const parsed = JSON.parse(text);
-              if (Array.isArray(parsed)) matches = parsed as MatchOutput[];
-            } catch {}
-          }
+        const candidateSNPs = parseAndFilterSNPs(candidate.text);
+
+        if (candidateSNPs.length < 1000) continue;
+
+        // Perform comprehensive kinship analysis
+        const analysis = analyzeKinship(userSNPs, candidateSNPs);
+
+        // Only include matches with sufficient data quality
+        if (analysis.metrics.totalSNPs >= 1000) {
+          matches.push({
+            userId: candidate.userId,
+            fileName: candidate.fileName,
+            relationship: analysis.relationship,
+            confidence: analysis.confidence,
+            details: analysis.details,
+            metrics: analysis.metrics,
+          });
         }
-      } catch {}
+      } catch (err) {
+        console.error(`Error analyzing candidate ${candidate.userId}:`, err);
+      }
     }
 
-    // Fallback: deterministic IBS matching using saved text samples
-    if (matches.length === 0) {
-      const userMap = parseGenotypes(String(dnaText).slice(0, 200_000));
-      const computed: MatchOutput[] = candidates.map((c) => {
-        const otherMap = parseGenotypes(c.text);
-        const { ibsSharing } = computeIbs(userMap, otherMap);
-        return {
-          userId: c.userId,
-          fileName: c.fileName,
-          relationship: estimateRelationship(ibsSharing),
-          confidence: Math.round(ibsSharing),
-          details: `IBS sharing ${ibsSharing.toFixed(2)}%`,
-        };
-      });
-      // Filter low-confidence
-      matches = computed.filter((m) => m.confidence >= 55).slice(0, 20);
-    }
+    // Sort by kinship coefficient (most related first)
+    matches.sort(
+      (a, b) => b.metrics.kinshipCoefficient - a.metrics.kinshipCoefficient
+    );
 
-    return NextResponse.json({ matches: matches || [] });
+    // Return top 50 matches
+    return NextResponse.json({ matches: matches.slice(0, 50) });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message ?? "Failed to match DNA" },
@@ -151,67 +163,453 @@ OTHER_DNA:\n${candidates
   }
 }
 
-// === Simple SNP parser and IBS calculator ===
-function parseGenotypes(text: string): Record<string, string> {
-  const map: Record<string, string> = {};
+// ============================================================================
+// SNP Parsing with Quality Control
+// ============================================================================
+
+function parseAndFilterSNPs(text: string): SNP[] {
+  const snps: SNP[] = [];
   const lines = text.split(/\r?\n/);
+  const seenPositions = new Set<string>();
+
   for (const line of lines) {
     const t = line.trim();
     if (!t || t.startsWith("#")) continue;
-    // Accept formats like: chr1-69511 0/1  OR  chr1 69511 0/1
-    const bySpace = t.split(/\s+/);
-    if (bySpace.length >= 2) {
-      if (bySpace[0].includes("-")) {
-        const [pos, geno] = [bySpace[0], bySpace[1]];
-        if (geno && /^(0|1)[\/|](0|1)$/.test(geno))
-          map[pos] = normalizeGeno(geno);
-      } else if (bySpace.length >= 3) {
-        const pos = `${bySpace[0]}-${bySpace[1]}`;
-        const geno = bySpace[2];
-        if (geno && /^(0|1)[\/|](0|1)$/.test(geno))
-          map[pos] = normalizeGeno(geno);
-      }
+
+    let chr = "";
+    let pos = 0;
+    let geno = "";
+
+    // Parse different formats
+    const parts = t.split(/\s+/);
+
+    if (parts[0].includes("-")) {
+      // Format: chr1-69511 0/1
+      const [chrPos, genoStr] = parts;
+      const [c, p] = chrPos.split("-");
+      chr = c.replace("chr", "");
+      pos = parseInt(p);
+      geno = genoStr;
+    } else if (parts.length >= 3) {
+      // Format: chr1 69511 0/1 or 1 69511 0/1
+      chr = parts[0].replace("chr", "");
+      pos = parseInt(parts[1]);
+      geno = parts[2];
     } else if (t.includes(":")) {
-      // rsID:geno fallback e.g., rs123:0/1
-      const [pos, geno] = t.split(":");
-      if (geno && /^(0|1)[\/|](0|1)$/.test(geno))
-        map[pos] = normalizeGeno(geno);
+      // Format: rs123:0/1
+      const [rsid, genoStr] = t.split(":");
+      chr = "unknown";
+      pos = rsid.hashCode(); // Use hash as position for rsID
+      geno = genoStr;
+    }
+
+    // Validate and normalize genotype
+    if (geno && /^[0-2][\/|][0-2]$/.test(geno)) {
+      const normalized = normalizeGenotype(geno);
+      if (normalized && pos > 0) {
+        const posKey = `${chr}-${pos}`;
+
+        // Skip duplicates
+        if (seenPositions.has(posKey)) continue;
+        seenPositions.add(posKey);
+
+        snps.push({
+          chr,
+          pos,
+          genotype: normalized,
+        });
+      }
     }
   }
-  return map;
+
+  // Sort by chromosome and position for IBD detection
+  return snps.sort((a, b) => {
+    const chrA = parseInt(a.chr) || 999;
+    const chrB = parseInt(b.chr) || 999;
+    if (chrA !== chrB) return chrA - chrB;
+    return a.pos - b.pos;
+  });
 }
 
-function normalizeGeno(g: string): string {
-  const [a, b] = g.replace("|", "/").split("/");
-  return [a, b].sort().join("/");
-}
+function normalizeGenotype(g: string): [number, number] | null {
+  const clean = g.replace("|", "/");
+  const [a, b] = clean.split("/").map(Number);
 
-function computeIbs(a: Record<string, string>, b: Record<string, string>) {
-  let ibs0 = 0,
-    ibs1 = 0,
-    ibs2 = 0,
-    total = 0;
-  for (const pos in a) {
-    const ga = a[pos];
-    const gb = b[pos];
-    if (!gb) continue;
-    total++;
-    const [a1, a2] = ga.split("/");
-    const [b1, b2] = gb.split("/");
-    const shared = [a1, a2].filter((x) => x === b1 || x === b2).length;
-    if (shared === 0) ibs0++;
-    else if (shared === 1 || ga !== gb) ibs1++;
-    else ibs2++;
+  if (isNaN(a) || isNaN(b) || a < 0 || a > 2 || b < 0 || b > 2) {
+    return null;
   }
-  const ibsSharing = total > 0 ? ((ibs1 * 0.5 + ibs2) / total) * 100 : 0;
-  return { ibs0, ibs1, ibs2, total, ibsSharing };
+
+  // Return sorted alleles
+  return a <= b ? [a, b] : [b, a];
 }
 
-function estimateRelationship(ibsSharing: number): string {
-  if (ibsSharing > 99) return "Identical twins";
-  if (ibsSharing >= 75) return "Parent-child or full siblings";
-  if (ibsSharing >= 62.5) return "Half-siblings or grandparent-grandchild";
-  if (ibsSharing >= 56.25) return "First cousins";
-  if (ibsSharing >= 53) return "Second cousins";
-  return "Distant or unrelated";
+// ============================================================================
+// Comprehensive Kinship Analysis
+// ============================================================================
+
+function analyzeKinship(snps1: SNP[], snps2: SNP[]) {
+  // Build position lookup for efficient comparison
+  const map1 = new Map<string, SNP>();
+  for (const snp of snps1) {
+    map1.set(`${snp.chr}-${snp.pos}`, snp);
+  }
+
+  const map2 = new Map<string, SNP>();
+  for (const snp of snps2) {
+    map2.set(`${snp.chr}-${snp.pos}`, snp);
+  }
+
+  // Find overlapping SNPs
+  const overlapping: Array<{
+    pos: string;
+    chr: string;
+    posNum: number;
+    snp1: SNP;
+    snp2: SNP;
+  }> = [];
+
+  for (const [pos, snp1] of map1) {
+    const snp2 = map2.get(pos);
+    if (snp2) {
+      overlapping.push({
+        pos,
+        chr: snp1.chr,
+        posNum: snp1.pos,
+        snp1,
+        snp2,
+      });
+    }
+  }
+
+  if (overlapping.length < 1000) {
+    return {
+      relationship: "Insufficient overlap",
+      confidence: 0,
+      details: `Only ${overlapping.length} overlapping SNPs`,
+      metrics: {
+        totalSNPs: overlapping.length,
+        ibdSegments: 0,
+        totalIBD_cM: 0,
+        ibs0: 0,
+        ibs1: 0,
+        ibs2: 0,
+        kinshipCoefficient: 0,
+      },
+    };
+  }
+
+  // Calculate IBS states
+  const ibsStates = calculateIBS(overlapping);
+
+  // Detect IBD segments
+  const ibdSegments = detectIBDSegments(overlapping);
+
+  // Calculate kinship coefficient
+  const kinshipCoefficient = calculateKinshipCoefficient(
+    ibsStates,
+    overlapping.length
+  );
+
+  // Estimate total shared cM
+  const totalIBD_cM = ibdSegments.reduce((sum, seg) => sum + seg.lengthCM, 0);
+
+  // Determine relationship
+  const { relationship, confidence } = determineRelationship(
+    kinshipCoefficient,
+    totalIBD_cM,
+    ibdSegments.length,
+    overlapping.length
+  );
+
+  const details = [
+    `Overlapping SNPs: ${overlapping.length}`,
+    `IBD Segments: ${ibdSegments.length}`,
+    `Total IBD: ${totalIBD_cM.toFixed(1)} cM`,
+    `Kinship: ${kinshipCoefficient.toFixed(4)}`,
+    `IBS: ${ibsStates.ibs0}/${ibsStates.ibs1}/${ibsStates.ibs2}`,
+  ].join(" | ");
+
+  return {
+    relationship,
+    confidence,
+    details,
+    metrics: {
+      totalSNPs: overlapping.length,
+      ibdSegments: ibdSegments.length,
+      totalIBD_cM,
+      ibs0: ibsStates.ibs0,
+      ibs1: ibsStates.ibs1,
+      ibs2: ibsStates.ibs2,
+      kinshipCoefficient,
+    },
+  };
 }
+
+// ============================================================================
+// IBS Calculation
+// ============================================================================
+
+function calculateIBS(overlapping: Array<{ snp1: SNP; snp2: SNP }>) {
+  let ibs0 = 0;
+  let ibs1 = 0;
+  let ibs2 = 0;
+
+  for (const { snp1, snp2 } of overlapping) {
+    const [a1, a2] = snp1.genotype;
+    const [b1, b2] = snp2.genotype;
+
+    // Count shared alleles
+    let shared = 0;
+    if (a1 === b1 || a1 === b2) shared++;
+    if (a2 === b1 || a2 === b2) shared++;
+
+    if (shared === 0) {
+      ibs0++;
+    } else if (shared === 1 || (a1 === a2) !== (b1 === b2)) {
+      ibs1++;
+    } else {
+      ibs2++;
+    }
+  }
+
+  return { ibs0, ibs1, ibs2 };
+}
+
+// ============================================================================
+// IBD Segment Detection
+// ============================================================================
+
+function detectIBDSegments(
+  overlapping: Array<{
+    pos: string;
+    chr: string;
+    posNum: number;
+    snp1: SNP;
+    snp2: SNP;
+  }>
+): IBDSegment[] {
+  const segments: IBDSegment[] = [];
+
+  // Group by chromosome
+  const byChr = new Map<string, typeof overlapping>();
+  for (const item of overlapping) {
+    const list = byChr.get(item.chr) || [];
+    list.push(item);
+    byChr.set(item.chr, list);
+  }
+
+  for (const [chr, snps] of byChr) {
+    let segmentStart = -1;
+    let segmentSNPs: typeof snps = [];
+    let consecutiveIBS2 = 0;
+
+    for (let i = 0; i < snps.length; i++) {
+      const { snp1, snp2, posNum } = snps[i];
+      const [a1, a2] = snp1.genotype;
+      const [b1, b2] = snp2.genotype;
+
+      // Check if IBS2 (fully matching)
+      const isIBS2 = a1 === b1 && a2 === b2;
+
+      if (isIBS2) {
+        consecutiveIBS2++;
+
+        if (segmentStart === -1) {
+          segmentStart = posNum;
+          segmentSNPs = [snps[i]];
+        } else {
+          segmentSNPs.push(snps[i]);
+        }
+      } else {
+        // Break in IBD - save segment if long enough
+        if (consecutiveIBS2 >= 50) {
+          // Minimum 50 consecutive IBS2 SNPs
+          const startPos = segmentSNPs[0].posNum;
+          const endPos = segmentSNPs[segmentSNPs.length - 1].posNum;
+          const lengthBp = endPos - startPos;
+
+          // Rough conversion: 1 cM ≈ 1 Mb
+          const lengthCM = lengthBp / 1_000_000;
+
+          if (lengthCM >= 5) {
+            // Minimum 5 cM
+            segments.push({
+              chr,
+              startPos,
+              endPos,
+              lengthCM,
+              snpCount: segmentSNPs.length,
+            });
+          }
+        }
+
+        // Reset
+        segmentStart = -1;
+        segmentSNPs = [];
+        consecutiveIBS2 = 0;
+      }
+    }
+
+    // Check final segment
+    if (consecutiveIBS2 >= 50) {
+      const startPos = segmentSNPs[0].posNum;
+      const endPos = segmentSNPs[segmentSNPs.length - 1].posNum;
+      const lengthCM = (endPos - startPos) / 1_000_000;
+
+      if (lengthCM >= 5) {
+        segments.push({
+          chr,
+          startPos,
+          endPos,
+          lengthCM,
+          snpCount: segmentSNPs.length,
+        });
+      }
+    }
+  }
+
+  return segments;
+}
+
+// ============================================================================
+// Kinship Coefficient Calculation (KING-robust method)
+// ============================================================================
+
+function calculateKinshipCoefficient(
+  ibsStates: { ibs0: number; ibs1: number; ibs2: number },
+  totalSNPs: number
+): number {
+  const { ibs0, ibs2 } = ibsStates;
+
+  // KING-robust kinship coefficient
+  // φ = (IBS2 - 2*IBS0) / (IBS1 + 2*IBS2)
+  const numerator = ibs2 - 2 * ibs0;
+  const denominator = totalSNPs;
+
+  if (denominator === 0) return 0;
+
+  const phi = numerator / denominator;
+
+  // Clamp between 0 and 0.5
+  return Math.max(0, Math.min(0.5, phi));
+}
+
+// ============================================================================
+// Relationship Determination
+// ============================================================================
+
+function determineRelationship(
+  kinshipCoeff: number,
+  totalIBD_cM: number,
+  segmentCount: number,
+  totalSNPs: number
+): { relationship: string; confidence: number } {
+  // Theoretical kinship coefficients:
+  // Identical twins: 0.5
+  // Parent-child: 0.25
+  // Full siblings: 0.25
+  // Half-siblings: 0.125
+  // Grandparent-grandchild: 0.125
+  // Aunt/Uncle-Niece/Nephew: 0.125
+  // First cousins: 0.0625
+  // Second cousins: 0.03125
+
+  // Confidence based on SNP count
+  let baseConfidence = Math.min(95, 50 + totalSNPs / 500);
+
+  if (kinshipCoeff > 0.4) {
+    return {
+      relationship: "Identical twins or duplicate sample",
+      confidence: Math.round(baseConfidence),
+    };
+  }
+
+  if (kinshipCoeff >= 0.177 && kinshipCoeff <= 0.354) {
+    // Check for parent-child vs full siblings using IBD segments
+    if (segmentCount >= 15 && totalIBD_cM >= 2000) {
+      return {
+        relationship: "Full siblings",
+        confidence: Math.round(baseConfidence * 0.95),
+      };
+    } else if (totalIBD_cM >= 3300) {
+      return {
+        relationship: "Parent-child",
+        confidence: Math.round(baseConfidence * 0.95),
+      };
+    } else {
+      return {
+        relationship: "Parent-child or full siblings",
+        confidence: Math.round(baseConfidence * 0.85),
+      };
+    }
+  }
+
+  if (kinshipCoeff >= 0.088 && kinshipCoeff <= 0.177) {
+    if (totalIBD_cM >= 1300) {
+      return {
+        relationship: "Half-siblings",
+        confidence: Math.round(baseConfidence * 0.85),
+      };
+    } else if (totalIBD_cM >= 1000) {
+      return {
+        relationship: "Grandparent-grandchild or Aunt/Uncle-Niece/Nephew",
+        confidence: Math.round(baseConfidence * 0.8),
+      };
+    } else {
+      return {
+        relationship: "2nd degree relative",
+        confidence: Math.round(baseConfidence * 0.75),
+      };
+    }
+  }
+
+  if (kinshipCoeff >= 0.044 && kinshipCoeff <= 0.088) {
+    return {
+      relationship: "First cousins",
+      confidence: Math.round(baseConfidence * 0.75),
+    };
+  }
+
+  if (kinshipCoeff >= 0.022 && kinshipCoeff <= 0.044) {
+    return {
+      relationship: "Second cousins or 1st cousin once removed",
+      confidence: Math.round(baseConfidence * 0.7),
+    };
+  }
+
+  if (kinshipCoeff >= 0.011 && kinshipCoeff <= 0.022) {
+    return {
+      relationship: "Third cousins",
+      confidence: Math.round(baseConfidence * 0.65),
+    };
+  }
+
+  if (kinshipCoeff > 0.005) {
+    return {
+      relationship: "Distant relatives (4th-6th cousins)",
+      confidence: Math.round(baseConfidence * 0.6),
+    };
+  }
+
+  return {
+    relationship: "Unrelated or very distant",
+    confidence: Math.round(baseConfidence * 0.5),
+  };
+}
+
+// Helper for string hashing (for rsID fallback)
+declare global {
+  interface String {
+    hashCode(): number;
+  }
+}
+
+String.prototype.hashCode = function () {
+  let hash = 0;
+  for (let i = 0; i < this.length; i++) {
+    const char = this.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+};
