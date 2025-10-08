@@ -29,8 +29,7 @@ export function DnaProfileManager() {
   const { toast } = useToast();
   const [items, setItems] = useState<DnaItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  // Upload UI moved to DNA Analysis page to keep a single upload entry point
 
   async function refresh() {
     try {
@@ -58,52 +57,7 @@ export function DnaProfileManager() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
-  async function onUpload() {
-    if (!user) {
-      toast({
-        title: "Login required",
-        description: "Please sign in first.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!file) {
-      toast({
-        title: "No file selected",
-        description: "Choose a DNA file.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Max 10 MB.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.set("userId", user.uid);
-      fd.set("file", file);
-      const resp = await fetch("/api/dna/upload", { method: "POST", body: fd });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.error || "Upload failed");
-      toast({ title: "DNA file saved", description: data.fileName });
-      setFile(null);
-      await refresh();
-    } catch (e: any) {
-      toast({
-        title: "Upload failed",
-        description: e?.message ?? "",
-        variant: "destructive",
-      });
-    } finally {
-      setUploading(false);
-    }
-  }
+  // onUpload removed
 
   async function onDelete(item: DnaItem) {
     if (!confirm(`Remove ${item.fileName}?`)) return;
@@ -138,20 +92,7 @@ export function DnaProfileManager() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <Input
-            type="file"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
-          <Button
-            onClick={onUpload}
-            disabled={!file || uploading}
-            className="sm:w-auto"
-          >
-            <UploadCloud className="mr-2 h-4 w-4" />{" "}
-            {uploading ? "Uploading..." : "Upload"}
-          </Button>
-        </div>
+        {/* Upload input has been moved to DNA Analysis page */}
 
         <div className="border-t pt-4">
           {loading ? (

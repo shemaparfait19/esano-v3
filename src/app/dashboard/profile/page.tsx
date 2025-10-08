@@ -1285,40 +1285,7 @@ export default function ProfilePage() {
 
       <DnaProfileManager />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline text-2xl text-primary">
-            DNA Data
-          </CardTitle>
-          <CardDescription>
-            Upload and save your raw DNA text file. You can analyze immediately
-            or later.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <Input
-            type="file"
-            onChange={(e) => setDnaFile(e.target.files?.[0] ?? null)}
-          />
-          {dnaFile && (
-            <div className="text-sm text-muted-foreground">
-              Selected: {dnaFile.name} ({Math.round(dnaFile.size / 1024)} KB)
-            </div>
-          )}
-          <div className="flex gap-2">
-            <Button onClick={handleSaveDna} disabled={!dnaFile || dnaSaving}>
-              {dnaSaving ? "Saving..." : "Save DNA"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleAnalyzeDna}
-              disabled={!dnaFile || dnaAnalyzing}
-            >
-              {dnaAnalyzing ? "Analyzing..." : "Analyze Now"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <DnaProfileManager />
     </div>
   );
 }
