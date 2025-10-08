@@ -60,6 +60,7 @@ export async function POST(req: Request) {
         },
         fields: "id, name, webViewLink",
       });
+      const textSample = buf.toString("utf8").slice(0, 200_000);
       const doc = {
         userId,
         fileName: res.data.name as string,
@@ -69,6 +70,7 @@ export async function POST(req: Request) {
         fileSize: buf.byteLength,
         status: "active" as const,
         backend: "gdrive_user" as const,
+        textSample,
       };
       await adminDb.collection("dna_data").add(doc);
       return NextResponse.json({ ok: true, ...doc });
@@ -80,6 +82,7 @@ export async function POST(req: Request) {
         mimeType: file.type || "text/plain",
         data: buf,
       });
+      const textSample = buf.toString("utf8").slice(0, 200_000);
       const doc = {
         userId,
         fileName: driveRes.name,
@@ -89,6 +92,7 @@ export async function POST(req: Request) {
         fileSize: buf.byteLength,
         status: "active" as const,
         backend: "gdrive_service" as const,
+        textSample,
       };
       await adminDb.collection("dna_data").add(doc);
       return NextResponse.json({ ok: true, ...doc });
@@ -106,6 +110,7 @@ export async function POST(req: Request) {
         action: "read",
         expires: Date.now() + 1000 * 60 * 60 * 2,
       });
+      const textSample = buf.toString("utf8").slice(0, 200_000);
       const doc = {
         userId,
         fileName,
@@ -115,6 +120,7 @@ export async function POST(req: Request) {
         fileSize: buf.byteLength,
         status: "active" as const,
         backend: "gcs" as const,
+        textSample,
       };
       await adminDb.collection("dna_data").add(doc);
       return NextResponse.json({ ok: true, ...doc });
