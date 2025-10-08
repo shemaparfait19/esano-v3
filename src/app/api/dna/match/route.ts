@@ -12,6 +12,8 @@ type MatchOutput = {
   relationship: string;
   confidence: number;
   details: string;
+  displayName?: string;
+  avatarUrl?: string;
   metrics: {
     totalSNPs: number;
     ibdSegments: number;
@@ -232,9 +234,32 @@ export async function POST(req: Request) {
       return b.metrics.kinshipCoefficient - a.metrics.kinshipCoefficient;
     });
 
-    // Return top 50 matches
+    // Enrich with user display names/avatars
+    const top = uniqueMatches.slice(0, 50);
+    const ids = Array.from(new Set(top.map((m) => m.userId))).slice(0, 50);
+    const profiles: Record<string, any> = {};
+    for (const id of ids) {
+      try {
+        const doc = await adminDb.collection("users").doc(id).get();
+        if (doc.exists) profiles[id] = doc.data();
+      } catch {}
+    }
+    const enriched = top.map((m) => ({
+      ...m,
+      displayName:
+        profiles[m.userId]?.fullName ||
+        profiles[m.userId]?.name ||
+        profiles[m.userId]?.displayName ||
+        (profiles[m.userId]?.firstName && profiles[m.userId]?.lastName
+          ? `${profiles[m.userId]?.firstName} ${profiles[m.userId]?.lastName}`
+          : undefined),
+      avatarUrl:
+        profiles[m.userId]?.profilePicture || profiles[m.userId]?.photoURL,
+    }));
+
+    // Return top matches enriched
     return NextResponse.json({
-      matches: uniqueMatches.slice(0, 50),
+      matches: enriched,
       _diag: _diagBase,
     });
   } catch (e: any) {

@@ -20,6 +20,8 @@ type Match = {
   relationship: string;
   confidence: number;
   details?: string;
+  displayName?: string;
+  avatarUrl?: string;
 };
 
 export function DnaMatchFinder({ userId }: { userId: string }) {
@@ -168,18 +170,59 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
                 key={i}
                 className="flex items-center justify-between rounded border p-3"
               >
-                <div>
+                <div className="flex items-center gap-3">
+                  <img
+                    src={
+                      m.avatarUrl || `https://picsum.photos/seed/${m.userId}/64`
+                    }
+                    alt="avatar"
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
                   <div className="font-medium">
-                    {m.relationship} • {Math.round(m.confidence)}%
+                    {m.displayName || m.userId} • {m.relationship} •{" "}
+                    {Math.round(m.confidence)}%
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    userId: {m.userId} • {m.fileName}
+                    {m.fileName}
                   </div>
                   {m.details && (
                     <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
                       {m.details}
                     </div>
                   )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`/dashboard/profile?userId=${encodeURIComponent(
+                      m.userId
+                    )}`}
+                    className="text-xs underline"
+                  >
+                    View Profile
+                  </a>
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await fetch("/api/requests", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            fromUserId: undefined,
+                            toUserId: m.userId,
+                          }),
+                        });
+                        toast({ title: "Request sent" });
+                      } catch {
+                        toast({
+                          title: "Failed to send request",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
+                    Connect
+                  </Button>
                 </div>
               </div>
             ))}
