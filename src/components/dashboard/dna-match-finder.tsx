@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/auth-context";
 import { Dna, Search, Loader2 } from "lucide-react";
 
 type Match = {
@@ -26,6 +27,7 @@ type Match = {
 
 export function DnaMatchFinder({ userId }: { userId: string }) {
   const { toast } = useToast();
+  const { user } = useAuth() as any;
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -193,9 +195,7 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <a
-                    href={`/dashboard/profile?userId=${encodeURIComponent(
-                      m.userId
-                    )}`}
+                    href={`/dashboard/profile/${encodeURIComponent(m.userId)}`}
                     className="text-xs underline"
                   >
                     View Profile
@@ -203,12 +203,19 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
                   <Button
                     size="sm"
                     onClick={async () => {
+                      if (!user?.uid) {
+                        toast({
+                          title: "Sign in required",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
                       try {
                         await fetch("/api/requests", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
-                            fromUserId: undefined,
+                            fromUserId: user.uid,
                             toUserId: m.userId,
                           }),
                         });
