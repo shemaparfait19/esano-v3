@@ -27,17 +27,19 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [dnaTextInput, setDnaTextInput] = useState("");
 
   const onFind = async () => {
-    if (!file) {
+    const hasText = dnaTextInput && dnaTextInput.trim().length > 0;
+    if (!hasText && !file) {
       toast({
-        title: "No file selected",
-        description: "Choose a DNA file.",
+        title: "Provide DNA data",
+        description: "Paste DNA text or choose a file.",
         variant: "destructive",
       });
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
+    if (!hasText && file && file.size > 10 * 1024 * 1024) {
       toast({
         title: "File too large",
         description: "Max 10 MB.",
@@ -47,7 +49,9 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
     }
     try {
       setLoading(true);
-      const dnaText = (await file.text()).slice(0, 1_000_000);
+      const dnaText = hasText
+        ? dnaTextInput.slice(0, 1_000_000)
+        : (await file!.text()).slice(0, 1_000_000);
       const resp = await fetch("/api/dna/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,26 +101,41 @@ export function DnaMatchFinder({ userId }: { userId: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <Input
-            type="file"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
-          <Button
-            onClick={onFind}
-            disabled={loading || !file}
-            className="sm:w-auto"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...
-              </>
-            ) : (
-              <>
-                <Search className="mr-2 h-4 w-4" /> Find Matches
-              </>
-            )}
-          </Button>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <Input
+              type="file"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+            <Button onClick={onFind} disabled={loading} className="sm:w-auto">
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...
+                </>
+              ) : (
+                <>
+                  <Search className="mr-2 h-4 w-4" /> Find Matches
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-sm text-muted-foreground">
+              Or paste DNA text (VCF or raw export)
+            </label>
+            <textarea
+              value={dnaTextInput}
+              onChange={(e) => setDnaTextInput(e.target.value)}
+              rows={6}
+              className="w-full rounded border p-2 font-mono text-sm"
+              placeholder="#CHROM POS ID REF ALT ... or raw letters"
+            />
+            <div className="text-xs text-muted-foreground">
+              We’ll use pasted text if provided; otherwise your selected file.
+              Max 1,000,000 characters.
+            </div>
+          </div>
         </div>
 
         {matches.length > 0 && (
