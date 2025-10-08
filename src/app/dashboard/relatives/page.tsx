@@ -53,6 +53,37 @@ export default function RelativesPage() {
             if (id !== user.uid) ids.add(id);
           });
         });
+
+        // Fallback: infer connections from accepted connectionRequests in either direction
+        if (ids.size === 0) {
+          try {
+            const reqRef = collection(db, "connectionRequests");
+            const [accOut, accIn] = await Promise.all([
+              getDocs(
+                query(
+                  reqRef,
+                  where("fromUserId", "==", user.uid),
+                  where("status", "==", "accepted")
+                )
+              ),
+              getDocs(
+                query(
+                  reqRef,
+                  where("toUserId", "==", user.uid),
+                  where("status", "==", "accepted")
+                )
+              ),
+            ]);
+            accOut.docs.forEach((d) => {
+              const toId = (d.data() as any)?.toUserId;
+              if (toId && toId !== user.uid) ids.add(toId);
+            });
+            accIn.docs.forEach((d) => {
+              const fromId = (d.data() as any)?.fromUserId;
+              if (fromId && fromId !== user.uid) ids.add(fromId);
+            });
+          } catch {}
+        }
         if (!ignore) setConnectedIds(Array.from(ids));
       } catch {}
     }
