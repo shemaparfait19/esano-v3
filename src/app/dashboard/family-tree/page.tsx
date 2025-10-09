@@ -99,6 +99,18 @@ export default function FamilyTreePage() {
     }
   }, [user?.uid, ownerIdParam]);
 
+  // Lightweight polling to reflect remote edits in near real-time, including shared trees
+  useEffect(() => {
+    if (!user?.uid) return;
+    const interval = setInterval(() => {
+      // Avoid clobbering while we have unsaved local edits
+      if (!dirty && !isLoading) {
+        loadFamilyTree();
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [user?.uid, ownerIdParam, dirty, isLoading]);
+
   const loadFamilyTree = async () => {
     try {
       setLoading(true);
