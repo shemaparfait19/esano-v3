@@ -602,9 +602,9 @@ export default function FamilyTreePage() {
     <div
       className={`flex flex-col h-full ${
         isFullscreen ? "fixed inset-0 z-50 bg-white" : ""
-      } max-w-[100vw] overflow-hidden`}
+      } max-w-[100vw] overflow-x-hidden`}
     >
-      <div className="flex items-center justify-between px-4 py-2">
+      <div className="flex items-center justify-between px-4 py-2 sticky top-16 z-20 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b">
         <div className="flex-1">
           <TreeToolbar
             onAddMember={handleAddMember}
@@ -614,9 +614,51 @@ export default function FamilyTreePage() {
             onOpenSettings={handleOpenSettings}
           />
         </div>
-        <div className="ml-3">
+        {!ownerIdParam && (
+          <div className="ml-3">
+            <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
+              Share {shares.length > 0 ? `(${shares.length})` : ""}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div id="tree-viewport" className="flex-1 relative min-h-0 overflow-auto">
+        <TreeCanvas
+          onNodeClick={handleNodeClick}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          onCanvasClick={handleCanvasClick}
+          presence={presence}
+          className="w-full h-full max-w-[100vw]"
+        />
+
+        {/* Right-side floating tools */}
+        <div className="absolute right-4 top-24 flex flex-col gap-2 bg-white/90 backdrop-blur rounded-lg p-2 shadow border">
+          <Button variant="outline" size="sm" onClick={onUndo} className="px-2">
+            Undo
+          </Button>
+          <Button variant="outline" size="sm" onClick={onRedo} className="px-2">
+            Redo
+          </Button>
           <Button
             variant="outline"
+            size="sm"
+            onClick={handleExport}
+            className="px-2"
+          >
+            Export
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleToggleFullscreen}
+            className="px-2"
+          >
+            Fullscreen
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={async () => {
               const ownerId = ownerIdParam || user?.uid;
               if (!ownerId) return;
@@ -651,27 +693,11 @@ export default function FamilyTreePage() {
                 });
               }
             }}
+            className="px-2"
           >
-            AI Suggestions
+            AI
           </Button>
         </div>
-        {!ownerIdParam && (
-          <div className="ml-3">
-            <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
-              Share {shares.length > 0 ? `(${shares.length})` : ""}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 relative">
-        <TreeCanvas
-          onNodeClick={handleNodeClick}
-          onNodeDoubleClick={handleNodeDoubleClick}
-          onCanvasClick={handleCanvasClick}
-          presence={presence}
-          className="w-full h-full max-w-[100vw] overflow-auto"
-        />
 
         {/* Node Editor Sidebar */}
         {editingNode && (
