@@ -604,7 +604,7 @@ export default function FamilyTreePage() {
         isFullscreen ? "fixed inset-0 z-50 bg-white" : ""
       } max-w-[100vw] overflow-hidden`}
     >
-      <div className="flex items-center justify-between px-4 py-2">
+      <div className="flex items-center justify-between px-4 py-2 sticky top-16 z-20 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b">
         <div className="flex-1">
           <TreeToolbar
             onAddMember={handleAddMember}
@@ -664,13 +664,13 @@ export default function FamilyTreePage() {
         )}
       </div>
 
-      <div className="flex-1 relative">
+      <div id="tree-viewport" className="flex-1 relative min-h-0 overflow-auto">
         <TreeCanvas
           onNodeClick={handleNodeClick}
           onNodeDoubleClick={handleNodeDoubleClick}
           onCanvasClick={handleCanvasClick}
           presence={presence}
-          className="w-full h-full max-w-[100vw] overflow-auto"
+          className="w-full h-full max-w-[100vw]"
         />
 
         {/* Node Editor Sidebar */}
