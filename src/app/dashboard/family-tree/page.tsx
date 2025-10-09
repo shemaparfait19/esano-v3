@@ -25,7 +25,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Heart } from "lucide-react";
+import {
+  Plus,
+  Heart,
+  Undo2,
+  Redo2,
+  Download,
+  Maximize2,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import {
@@ -105,7 +113,6 @@ export default function FamilyTreePage() {
   useEffect(() => {
     if (!user?.uid) return;
     const interval = setInterval(() => {
-      // Avoid clobbering while we have unsaved local edits
       if (!dirty && !isLoading) {
         loadFamilyTree();
       }
@@ -120,7 +127,6 @@ export default function FamilyTreePage() {
       const ownerId = ownerIdParam || user?.uid;
       if (!ownerId) return;
 
-      // If viewing someone else's tree, verify share and role
       if (ownerIdParam && ownerIdParam !== user?.uid) {
         const shareRes = await fetch(
           `/api/family-tree/share?sharedWithMe=1&userId=${user?.uid}`
@@ -148,7 +154,7 @@ export default function FamilyTreePage() {
       }
 
       setTree(data.tree);
-      // Mark share notification as read when opening a shared tree
+
       if (ownerIdParam && user?.uid) {
         try {
           await fetch("/api/notifications/mark-read-share", {
@@ -159,14 +165,12 @@ export default function FamilyTreePage() {
         } catch {}
       }
 
-      // Load current shares for owner (for badge and dialog) when viewing own tree
       if (!ownerIdParam && user?.uid) {
         try {
           const res = await fetch(`/api/family-tree/share?ownerId=${user.uid}`);
           const d = await res.json();
           if (res.ok) {
             setShares(d.shares || []);
-            // Resolve names
             const loadNames = async () => {
               const entries: [string, string][] = [];
               for (const s of d.shares || []) {
@@ -210,12 +214,12 @@ export default function FamilyTreePage() {
 
   const saveFamilyTree = async () => {
     if (!user?.uid || !tree) return;
-    if (readonly) return; // Guard autosave in read-only mode
+    if (readonly) return;
 
     try {
       setLoading(true);
 
-      const targetOwner = ownerIdParam || user.uid; // save to owner's tree
+      const targetOwner = ownerIdParam || user.uid;
       const response = await fetch("/api/family-tree", {
         method: "POST",
         headers: {
@@ -252,7 +256,6 @@ export default function FamilyTreePage() {
     }
   };
 
-  // Debounced autosave when dirty
   useEffect(() => {
     if (!dirty || readonly) return;
     const t = setTimeout(() => {
@@ -301,8 +304,6 @@ export default function FamilyTreePage() {
 
     setShowAddMemberDialog(false);
     setNewMember({});
-
-    // XP: adding a member
     setDirty(true);
   };
 
@@ -348,12 +349,9 @@ export default function FamilyTreePage() {
 
     setShowAddRelationshipDialog(false);
     setNewRelationship({});
-
-    // XP: adding a relationship
     setDirty(true);
   };
 
-  // Smart relationship suggestions: when selecting a parent-child, suggest missing counterpart
   const [suggestion, setSuggestion] = useState<string | null>(null);
   useEffect(() => {
     if (
@@ -365,7 +363,6 @@ export default function FamilyTreePage() {
       return;
     }
     if (newRelationship.type === "parent") {
-      // If parent edge exists one-way, suggest spouse of that parent as other parent
       const parentId = newRelationship.fromId;
       const childId = newRelationship.toId;
       const hasOtherParent = edges.some(
@@ -464,7 +461,6 @@ export default function FamilyTreePage() {
     }
   };
 
-  // Realtime presence (basic): write self presence and read others
   useEffect(() => {
     const treeOwner = ownerIdParam || user?.uid;
     if (!user?.uid || !treeOwner) return;
@@ -492,23 +488,19 @@ export default function FamilyTreePage() {
           setPresence(items);
         },
         (err) => {
-          // Silently ignore permission issues
           console.warn("presence onSnapshot error", err?.code || err?.message);
         }
       );
       return () => unsub();
-    } catch (e) {
-      // Ignore when rules block presence
-    }
+    } catch (e) {}
   }, [user?.uid, ownerIdParam]);
 
-  // Track cursor and write to presence (throttled)
   const [lastPresenceWrite, setLastPresenceWrite] = useState<number>(0);
   const writePresence = async (worldX: number, worldY: number) => {
     const treeOwner = ownerIdParam || user?.uid;
     if (!user?.uid || !treeOwner) return;
     const now = Date.now();
-    if (now - lastPresenceWrite < 150) return; // throttle
+    if (now - lastPresenceWrite < 150) return;
     setLastPresenceWrite(now);
     try {
       await setDoc(
@@ -530,14 +522,46 @@ export default function FamilyTreePage() {
   };
 
   const handleOpenSettings = () => {
-    // TODO: Implement settings dialog
     toast({
       title: "Settings",
       description: "Settings panel coming soon",
     });
   };
 
-  // Lineage highlight: when a node is selected, compute ancestors and descendants
+  const handleAISuggestions = async () => {
+    const ownerId = ownerIdParam || user?.uid;
+    if (!ownerId) return;
+    try {
+      const res = await fetch("/api/family-tree/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: ownerId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      const list = (data.suggestions || []).slice(0, 10);
+      const conflicts = data.conflicts || [];
+      const msg =
+        (list.length
+          ? list
+              .map(
+                (s: any) => `• (${Math.round(s.confidence * 100)}%) ${s.detail}`
+              )
+              .join("\n")
+          : "No suggestions found") +
+        (conflicts.length
+          ? "\n\nPotential conflicts:\n" +
+            conflicts.map((c: any) => `• ${c.message}`).join("\n")
+          : "");
+      alert(msg);
+    } catch (e: any) {
+      toast({
+        title: "Suggestions failed",
+        description: e?.message || "",
+      });
+    }
+  };
+
   useEffect(() => {
     if (!selectedNode) {
       useFamilyTreeStore
@@ -547,7 +571,6 @@ export default function FamilyTreePage() {
     }
     const visited = new Set<string>();
     const stack = [selectedNode];
-    // descendants
     while (stack.length) {
       const cur = stack.pop()!;
       if (visited.has(cur)) continue;
@@ -556,7 +579,6 @@ export default function FamilyTreePage() {
         .filter((e) => e.type === "parent" && e.fromId === cur)
         .forEach((e) => stack.push(e.toId));
     }
-    // ancestors
     const up = [selectedNode];
     while (up.length) {
       const cur = up.pop()!;
@@ -602,108 +624,134 @@ export default function FamilyTreePage() {
 
   return (
     <div
-      className={`flex flex-col h-full ${
+      className={`flex flex-col h-full w-full ${
         isFullscreen ? "fixed inset-0 z-50 bg-white" : ""
-      } max-w-[100vw] overflow-x-hidden`}
+      }`}
     >
-      <div className="flex items-center justify-between px-4 py-2 sticky top-16 z-20 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b">
-        <div className="flex-1">
-          <TreeToolbar
-            onAddMember={handleAddMember}
-            onAddRelationship={handleAddRelationship}
-            onExport={handleExport}
-            onToggleFullscreen={handleToggleFullscreen}
-            onOpenSettings={handleOpenSettings}
-          />
-        </div>
-        {!ownerIdParam && (
-          <div className="ml-3">
-            <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
-              Share {shares.length > 0 ? `(${shares.length})` : ""}
+      {/* Fixed Toolbar Header */}
+      <div className="flex-none border-b bg-white sticky top-0 z-20">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          {/* Left section - Main actions */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              onClick={handleAddMember}
+              size="sm"
+              disabled={readonly}
+              className="whitespace-nowrap"
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Member
+            </Button>
+            <Button
+              onClick={handleAddRelationship}
+              variant="outline"
+              size="sm"
+              disabled={readonly}
+              className="whitespace-nowrap"
+            >
+              <Heart className="h-4 w-4 mr-1.5" />
+              Add Relationship
             </Button>
           </div>
-        )}
+
+          {/* Right section - Tools */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="hidden sm:flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={undo}
+                disabled={readonly}
+                className="h-8 px-2"
+                title="Undo"
+              >
+                <Undo2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={redo}
+                disabled={readonly}
+                className="h-8 px-2"
+                title="Redo"
+              >
+                <Redo2 className="h-4 w-4" />
+              </Button>
+              <div className="w-px h-6 bg-border mx-1" />
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExport}
+              className="h-8 px-2 hidden sm:flex"
+              title="Export"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleFullscreen}
+              className="h-8 px-2 hidden sm:flex"
+              title="Fullscreen"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleAISuggestions}
+              className="h-8 px-2 hidden md:flex"
+              title="AI Suggestions"
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
+
+            {!ownerIdParam && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShareDialogOpen(true)}
+                className="whitespace-nowrap h-8"
+              >
+                Share {shares.length > 0 && `(${shares.length})`}
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div id="tree-viewport" className="flex-1 relative min-h-0 overflow-auto">
+      {/* Canvas Container */}
+      <div
+        id="tree-viewport"
+        className="flex-1 relative overflow-hidden bg-gray-50"
+      >
         <TreeCanvas
           onNodeClick={handleNodeClick}
           onNodeDoubleClick={handleNodeDoubleClick}
           onCanvasClick={handleCanvasClick}
           presence={presence}
-          className="w-full h-full max-w-[100vw]"
+          className="w-full h-full"
         />
 
-        {/* Right-side floating tools */}
-        <div className="absolute right-4 top-24 flex flex-col gap-2 bg-white/90 backdrop-blur rounded-lg p-2 shadow border">
-          <Button variant="outline" size="sm" onClick={undo} className="px-2">
-            Undo
-          </Button>
-          <Button variant="outline" size="sm" onClick={redo} className="px-2">
-            Redo
-          </Button>
+        {/* Mobile Floating Action Button */}
+        <div className="sm:hidden absolute bottom-4 right-4 flex flex-col gap-2">
           <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            className="px-2"
+            size="icon"
+            className="h-12 w-12 rounded-full shadow-lg"
+            onClick={handleAddMember}
+            disabled={readonly}
           >
-            Export
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleToggleFullscreen}
-            className="px-2"
-          >
-            Fullscreen
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              const ownerId = ownerIdParam || user?.uid;
-              if (!ownerId) return;
-              try {
-                const res = await fetch("/api/family-tree/suggest", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ userId: ownerId }),
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || "Failed");
-                const list = (data.suggestions || []).slice(0, 10);
-                const conflicts = data.conflicts || [];
-                const msg =
-                  (list.length
-                    ? list
-                        .map(
-                          (s: any) =>
-                            `• (${Math.round(s.confidence * 100)}%) ${s.detail}`
-                        )
-                        .join("\n")
-                    : "No suggestions found") +
-                  (conflicts.length
-                    ? "\n\nPotential conflicts:\n" +
-                      conflicts.map((c: any) => `• ${c.message}`).join("\n")
-                    : "");
-                alert(msg);
-              } catch (e: any) {
-                toast({
-                  title: "Suggestions failed",
-                  description: e?.message || "",
-                });
-              }
-            }}
-            className="px-2"
-          >
-            AI
+            <Plus className="h-5 w-5" />
           </Button>
         </div>
 
         {/* Node Editor Sidebar */}
         {editingNode && (
-          <div className="absolute top-4 right-4 z-10">
+          <div className="absolute top-4 right-4 z-30 max-w-sm w-full sm:w-96">
             <NodeEditor
               nodeId={editingNode}
               onClose={() => setEditingNode(null)}
@@ -722,15 +770,15 @@ export default function FamilyTreePage() {
 
       {/* Add Member Dialog */}
       <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Family Member Here</DialogTitle>
+            <DialogTitle>Add Family Member</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="firstName">First Name</Label>
+                <Label htmlFor="firstName">First Name *</Label>
                 <Input
                   id="firstName"
                   value={newMember.firstName || ""}
@@ -744,7 +792,7 @@ export default function FamilyTreePage() {
                 />
               </div>
               <div>
-                <Label htmlFor="lastName">Last Name</Label>
+                <Label htmlFor="lastName">Last Name *</Label>
                 <Input
                   id="lastName"
                   value={newMember.lastName || ""}
@@ -759,7 +807,7 @@ export default function FamilyTreePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="birthDate">Birth Date</Label>
                 <Input
@@ -809,9 +857,8 @@ export default function FamilyTreePage() {
               />
             </div>
 
-            <div className="flex gap-2 pt-4">
+            <div className="flex gap-2 pt-2">
               <Button onClick={handleSaveMember} className="flex-1">
-                <Plus className="h-4 w-4 mr-2" />
                 Add Member
               </Button>
               <Button
@@ -830,7 +877,7 @@ export default function FamilyTreePage() {
         open={showAddRelationshipDialog}
         onOpenChange={setShowAddRelationshipDialog}
       >
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add Relationship</DialogTitle>
           </DialogHeader>
@@ -913,9 +960,14 @@ export default function FamilyTreePage() {
               </Select>
             </div>
 
-            <div className="flex gap-2 pt-4">
+            {suggestion && (
+              <div className="text-xs text-muted-foreground p-2 bg-blue-50 rounded">
+                {suggestion}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
               <Button onClick={handleSaveRelationship} className="flex-1">
-                <Heart className="h-4 w-4 mr-2" />
                 Add Relationship
               </Button>
               <Button
@@ -925,41 +977,39 @@ export default function FamilyTreePage() {
                 Cancel
               </Button>
             </div>
-            {suggestion && (
-              <div className="text-xs text-muted-foreground mt-2">
-                {suggestion}
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Share Dialog */}
       <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Share Family Tree</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {shares.length > 0 && (
               <div>
-                <Label>Currently shared with</Label>
-                <div className="mt-2 space-y-1 text-sm">
+                <Label className="text-sm font-medium">
+                  Currently shared with
+                </Label>
+                <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
                   {shares.map((s) => (
                     <div
                       key={s.id}
-                      className="flex items-center justify-between"
+                      className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-gray-50"
                     >
-                      <div>
-                        {shareNames[s.targetUserId] ||
-                          s.targetEmail ||
-                          s.targetUserId}
-                        <span className="text-muted-foreground">
-                          {" "}
-                          · {s.role}
-                        </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {shareNames[s.targetUserId] ||
+                            s.targetEmail ||
+                            s.targetUserId}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {s.role}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         <Select
                           value={s.role}
                           onValueChange={async (v) => {
@@ -981,7 +1031,7 @@ export default function FamilyTreePage() {
                             } catch {}
                           }}
                         >
-                          <SelectTrigger className="h-7 w-28">
+                          <SelectTrigger className="h-7 w-24 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -990,8 +1040,9 @@ export default function FamilyTreePage() {
                           </SelectContent>
                         </Select>
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
+                          className="h-7 px-2 text-xs"
                           onClick={async () => {
                             try {
                               await fetch(
@@ -1012,31 +1063,45 @@ export default function FamilyTreePage() {
                 </div>
               </div>
             )}
-            <div>
-              <Label htmlFor="shareEmail">Email</Label>
-              <Input
-                id="shareEmail"
-                type="email"
-                value={shareEmail}
-                onChange={(e) => setShareEmail(e.target.value)}
-                placeholder="friend@example.com"
-              />
+
+            <div className="border-t pt-4">
+              <Label className="text-sm font-medium">
+                Share with new person
+              </Label>
+              <div className="mt-2 space-y-3">
+                <div>
+                  <Label htmlFor="shareEmail" className="text-xs">
+                    Email
+                  </Label>
+                  <Input
+                    id="shareEmail"
+                    type="email"
+                    value={shareEmail}
+                    onChange={(e) => setShareEmail(e.target.value)}
+                    placeholder="friend@example.com"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="shareRole" className="text-xs">
+                    Permission
+                  </Label>
+                  <Select
+                    value={shareRole}
+                    onValueChange={(v) => setShareRole(v as any)}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer (read-only)</SelectItem>
+                      <SelectItem value="editor">Editor (can edit)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="shareRole">Permission</Label>
-              <Select
-                value={shareRole}
-                onValueChange={(v) => setShareRole(v as any)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="viewer">Viewer (read-only)</SelectItem>
-                  <SelectItem value="editor">Editor (can edit)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
             <div className="flex gap-2 pt-2">
               <Button onClick={handleShare} className="flex-1">
                 Share
@@ -1045,7 +1110,7 @@ export default function FamilyTreePage() {
                 variant="outline"
                 onClick={() => setShareDialogOpen(false)}
               >
-                Cancel
+                Close
               </Button>
             </div>
           </div>
