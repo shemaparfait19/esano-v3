@@ -614,6 +614,47 @@ export default function FamilyTreePage() {
             onOpenSettings={handleOpenSettings}
           />
         </div>
+        <div className="ml-3">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              const ownerId = ownerIdParam || user?.uid;
+              if (!ownerId) return;
+              try {
+                const res = await fetch("/api/family-tree/suggest", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ userId: ownerId }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Failed");
+                const list = (data.suggestions || []).slice(0, 10);
+                const conflicts = data.conflicts || [];
+                const msg =
+                  (list.length
+                    ? list
+                        .map(
+                          (s: any) =>
+                            `• (${Math.round(s.confidence * 100)}%) ${s.detail}`
+                        )
+                        .join("\n")
+                    : "No suggestions found") +
+                  (conflicts.length
+                    ? "\n\nPotential conflicts:\n" +
+                      conflicts.map((c: any) => `• ${c.message}`).join("\n")
+                    : "");
+                alert(msg);
+              } catch (e: any) {
+                toast({
+                  title: "Suggestions failed",
+                  description: e?.message || "",
+                });
+              }
+            }}
+          >
+            AI Suggestions
+          </Button>
+        </div>
         {!ownerIdParam && (
           <div className="ml-3">
             <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
@@ -889,6 +930,54 @@ export default function FamilyTreePage() {
                           {" "}
                           · {s.role}
                         </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={s.role}
+                          onValueChange={async (v) => {
+                            try {
+                              await fetch("/api/family-tree/share", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  ownerId: user?.uid,
+                                  targetUserId: s.targetUserId,
+                                  role: v,
+                                }),
+                              });
+                              setShares((prev) =>
+                                prev.map((p) =>
+                                  p.id === s.id ? { ...p, role: v } : p
+                                )
+                              );
+                            } catch {}
+                          }}
+                        >
+                          <SelectTrigger className="h-7 w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="viewer">Viewer</SelectItem>
+                            <SelectItem value="editor">Editor</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              await fetch(
+                                `/api/family-tree/share?ownerId=${user?.uid}&targetUserId=${s.targetUserId}`,
+                                { method: "DELETE" }
+                              );
+                              setShares((prev) =>
+                                prev.filter((p) => p.id !== s.id)
+                              );
+                            } catch {}
+                          }}
+                        >
+                          Remove
+                        </Button>
                       </div>
                     </div>
                   ))}

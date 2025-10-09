@@ -174,6 +174,12 @@ export function TreeCanvas({
   };
 
   // ===== Render edges with smooth curves
+  const [hoveredEdge, setHoveredEdge] = useState<null | {
+    fromId: string;
+    toId: string;
+    type: string;
+  }>(null);
+
   const renderEdges = (ctx: CanvasRenderingContext2D, edges: any[]) => {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -205,7 +211,24 @@ export function TreeCanvas({
           ctx.shadowBlur = 6;
       }
 
-      ctx.stroke(new Path2D(edge.path));
+      const path2d = new Path2D(edge.path);
+      ctx.stroke(path2d);
+
+      // If hovered, draw animated glow
+      if (
+        hoveredEdge &&
+        hoveredEdge.fromId === edge.fromId &&
+        hoveredEdge.toId === edge.toId &&
+        hoveredEdge.type === edge.type
+      ) {
+        ctx.save();
+        ctx.shadowColor = "rgba(234, 179, 8, 0.9)";
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = (ctx.lineWidth || 2) + 1.5;
+        ctx.strokeStyle = "#f59e0b";
+        ctx.stroke(path2d);
+        ctx.restore();
+      }
       ctx.shadowBlur = 0;
     });
   };
@@ -428,6 +451,29 @@ export function TreeCanvas({
     );
   };
 
+  // Hit-test edges for hover tooltip
+  const getEdgeAtPosition = (worldX: number, worldY: number) => {
+    const { edges: epaths } = buildLayoutFromPositions();
+    const radius = 6; // hover tolerance
+    for (const e of epaths) {
+      if (!e.path) continue;
+      const path2d = new Path2D(e.path);
+      const ctx = canvasRef.current?.getContext("2d");
+      if (!ctx) continue;
+      // approximate by drawing a thicker invisible stroke and use isPointInStroke
+      ctx.save();
+      ctx.lineWidth = 10;
+      const hit = ctx.isPointInStroke(
+        path2d,
+        worldX * canvasState.zoom + 0,
+        worldY * canvasState.zoom + 0
+      );
+      ctx.restore();
+      if (hit) return e;
+    }
+    return null;
+  };
+
   // ===== Mouse events
   const handleMouseDown = (e: React.MouseEvent) => {
     setContextMenu(null);
@@ -476,6 +522,9 @@ export function TreeCanvas({
     } else {
       const hoveredNode = getNodeAtPosition(worldX, worldY);
       setHoveredNode(hoveredNode?.id || null);
+      const e = getEdgeAtPosition(worldX, worldY);
+      if (e) setHoveredEdge({ fromId: e.fromId, toId: e.toId, type: e.type });
+      else setHoveredEdge(null);
     }
   };
 
@@ -672,6 +721,17 @@ export function TreeCanvas({
         onTouchEnd={handleTouchEnd}
         style={{ touchAction: "none" }}
       />
+
+      {/* Relation tooltip */}
+      {hoveredEdge && (
+        <div className="pointer-events-none absolute left-2 top-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+          {hoveredEdge.type === "spouse"
+            ? "Spouse"
+            : hoveredEdge.type === "parent"
+            ? "Parent → Child"
+            : hoveredEdge.type.replace("_", " ")}
+        </div>
+      )}
 
       {/* Enhanced zoom controls */}
       <div className="absolute top-4 right-4 flex flex-col gap-2 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg border border-gray-200">

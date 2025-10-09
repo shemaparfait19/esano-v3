@@ -111,3 +111,55 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// PATCH /api/family-tree/share  body: { ownerId, targetUserId, role }
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { ownerId, targetUserId, role } = body as {
+      ownerId?: string;
+      targetUserId?: string;
+      role?: ShareRole;
+    };
+    if (!ownerId || !targetUserId || !role) {
+      return NextResponse.json(
+        { error: "ownerId, targetUserId, role required" },
+        { status: 400 }
+      );
+    }
+    const docId = `${ownerId}_${targetUserId}`;
+    await adminDb
+      .collection("familyTreeShares")
+      .doc(docId)
+      .set({ role, updatedAt: new Date().toISOString() }, { merge: true });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Failed to update share", detail: e?.message || "" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/family-tree/share?ownerId=...&targetUserId=...
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const ownerId = searchParams.get("ownerId");
+    const targetUserId = searchParams.get("targetUserId");
+    if (!ownerId || !targetUserId) {
+      return NextResponse.json(
+        { error: "ownerId and targetUserId required" },
+        { status: 400 }
+      );
+    }
+    const docId = `${ownerId}_${targetUserId}`;
+    await adminDb.collection("familyTreeShares").doc(docId).delete();
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Failed to remove share", detail: e?.message || "" },
+      { status: 500 }
+    );
+  }
+}
