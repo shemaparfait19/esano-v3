@@ -89,6 +89,8 @@ export default function FamilyTreePage() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [shareRole, setShareRole] = useState<"viewer" | "editor">("viewer");
+  const [shares, setShares] = useState<any[]>([]);
+  const [shareNames, setShareNames] = useState<Record<string, string>>({});
 
   // Load family tree on mount
   useEffect(() => {
@@ -142,6 +144,42 @@ export default function FamilyTreePage() {
           });
         } catch {}
       }
+
+      // Load current shares for owner (for badge and dialog) when viewing own tree
+      if (!ownerIdParam && user?.uid) {
+        try {
+          const res = await fetch(`/api/family-tree/share?ownerId=${user.uid}`);
+          const d = await res.json();
+          if (res.ok) {
+            setShares(d.shares || []);
+            // Resolve names
+            const loadNames = async () => {
+              const entries: [string, string][] = [];
+              for (const s of d.shares || []) {
+                try {
+                  const snap = await (
+                    await import("firebase/firestore")
+                  ).getDoc(
+                    (
+                      await import("firebase/firestore")
+                    ).doc(db, "users", s.targetUserId)
+                  );
+                  const ud = snap.exists() ? (snap.data() as any) : null;
+                  const name =
+                    ud?.fullName ||
+                    ud?.preferredName ||
+                    ud?.firstName ||
+                    s.targetEmail ||
+                    s.targetUserId;
+                  entries.push([s.targetUserId, name]);
+                } catch {}
+              }
+              setShareNames(Object.fromEntries(entries));
+            };
+            loadNames();
+          }
+        } catch {}
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to load family tree";
@@ -163,13 +201,14 @@ export default function FamilyTreePage() {
     try {
       setLoading(true);
 
+      const targetOwner = ownerIdParam || user.uid; // save to owner's tree
       const response = await fetch("/api/family-tree", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userId: user.uid,
+          userId: targetOwner,
           tree,
         }),
       });
@@ -551,7 +590,7 @@ export default function FamilyTreePage() {
     <div
       className={`flex flex-col h-full ${
         isFullscreen ? "fixed inset-0 z-50 bg-white" : ""
-      }`}
+      } max-w-[100vw] overflow-hidden`}
     >
       <div className="flex items-center justify-between px-4 py-2">
         <div className="flex-1">
@@ -566,7 +605,7 @@ export default function FamilyTreePage() {
         {!ownerIdParam && (
           <div className="ml-3">
             <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
-              Share
+              Share {shares.length > 0 ? `(${shares.length})` : ""}
             </Button>
           </div>
         )}
@@ -578,7 +617,7 @@ export default function FamilyTreePage() {
           onNodeDoubleClick={handleNodeDoubleClick}
           onCanvasClick={handleCanvasClick}
           presence={presence}
-          className="w-full h-full"
+          className="w-full h-full max-w-[100vw] overflow-auto"
         />
 
         {/* Node Editor Sidebar */}
@@ -821,6 +860,29 @@ export default function FamilyTreePage() {
             <DialogTitle>Share Family Tree</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {shares.length > 0 && (
+              <div>
+                <Label>Currently shared with</Label>
+                <div className="mt-2 space-y-1 text-sm">
+                  {shares.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between"
+                    >
+                      <div>
+                        {shareNames[s.targetUserId] ||
+                          s.targetEmail ||
+                          s.targetUserId}
+                        <span className="text-muted-foreground">
+                          {" "}
+                          · {s.role}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <Label htmlFor="shareEmail">Email</Label>
               <Input

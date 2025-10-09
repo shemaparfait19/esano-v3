@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 
 type ShareItem = {
@@ -18,6 +20,7 @@ export default function SharedTreesPage() {
   const [shares, setShares] = useState<ShareItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ownerNames, setOwnerNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let ignore = false;
@@ -30,7 +33,20 @@ export default function SharedTreesPage() {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load shares");
-        if (!ignore) setShares((data.shares || []) as ShareItem[]);
+        const list = (data.shares || []) as ShareItem[];
+        if (!ignore) setShares(list);
+        // Load owner names
+        const entries: [string, string][] = [];
+        for (const s of list) {
+          try {
+            const snap = await getDoc(doc(db, "users", s.ownerId));
+            const ud = snap.exists() ? (snap.data() as any) : null;
+            const nm =
+              ud?.fullName || ud?.preferredName || ud?.firstName || s.ownerId;
+            entries.push([s.ownerId, nm]);
+          } catch {}
+        }
+        if (!ignore) setOwnerNames(Object.fromEntries(entries));
       } catch (e: any) {
         if (!ignore) setError(e?.message || "Failed to load");
       } finally {
@@ -70,7 +86,9 @@ export default function SharedTreesPage() {
           <Card key={s.id}>
             <CardContent className="pt-4 flex items-center justify-between">
               <div>
-                <div className="font-medium">Owner: {s.ownerId}</div>
+                <div className="font-medium">
+                  Owner: {ownerNames[s.ownerId] || s.ownerId}
+                </div>
                 <div className="text-xs text-muted-foreground">
                   Role: {s.role}
                 </div>
