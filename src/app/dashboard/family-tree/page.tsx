@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { useFamilyTreeStore } from "@/lib/family-tree-store";
 import { TreeCanvas } from "@/components/family-tree/tree-canvas";
@@ -37,6 +38,9 @@ import {
 
 export default function FamilyTreePage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const ownerIdParam = searchParams?.get("ownerId") || undefined;
   const {
     tree,
     members,
@@ -81,19 +85,46 @@ export default function FamilyTreePage() {
     top: number;
   }>({ left: 0, top: 0 });
 
+  const [readonly, setReadonly] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareRole, setShareRole] = useState<"viewer" | "editor">("viewer");
+
   // Load family tree on mount
   useEffect(() => {
     if (user?.uid) {
       loadFamilyTree();
     }
-  }, [user?.uid]);
+  }, [user?.uid, ownerIdParam]);
 
   const loadFamilyTree = async () => {
     try {
       setLoading(true);
       setError(null);
+      const ownerId = ownerIdParam || user?.uid;
+      if (!ownerId) return;
 
-      const response = await fetch(`/api/family-tree?userId=${user?.uid}`);
+      // If viewing someone else's tree, verify share and role
+      if (ownerIdParam && ownerIdParam !== user?.uid) {
+        const shareRes = await fetch(
+          `/api/family-tree/share?sharedWithMe=1&userId=${user?.uid}`
+        );
+        const shareData = await shareRes.json();
+        if (!shareRes.ok) {
+          throw new Error(shareData.error || "Failed to verify share access");
+        }
+        const share = (shareData.shares || []).find(
+          (s: any) => s.ownerId === ownerIdParam
+        );
+        if (!share) {
+          throw new Error("You do not have access to this family tree");
+        }
+        setReadonly(share.role !== "editor");
+      } else {
+        setReadonly(false);
+      }
+
+      const response = await fetch(`/api/family-tree?userId=${ownerId}`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -101,6 +132,16 @@ export default function FamilyTreePage() {
       }
 
       setTree(data.tree);
+      // Mark share notification as read when opening a shared tree
+      if (ownerIdParam && user?.uid) {
+        try {
+          await fetch("/api/notifications/mark-read-share", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.uid, ownerId: ownerIdParam }),
+          });
+        } catch {}
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to load family tree";
@@ -117,6 +158,7 @@ export default function FamilyTreePage() {
 
   const saveFamilyTree = async () => {
     if (!user?.uid || !tree) return;
+    if (readonly) return; // Guard autosave in read-only mode
 
     try {
       setLoading(true);
@@ -159,14 +201,18 @@ export default function FamilyTreePage() {
 
   // Debounced autosave when dirty
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || readonly) return;
     const t = setTimeout(() => {
       saveFamilyTree();
     }, 800);
     return () => clearTimeout(t);
-  }, [dirty]);
+  }, [dirty, readonly]);
 
   const handleAddMember = () => {
+    if (readonly) {
+      toast({ title: "View only", description: "You have view access only." });
+      return;
+    }
     setShowAddMemberDialog(true);
     setNewMember({
       firstName: "",
@@ -208,6 +254,10 @@ export default function FamilyTreePage() {
   };
 
   const handleAddRelationship = () => {
+    if (readonly) {
+      toast({ title: "View only", description: "You have view access only." });
+      return;
+    }
     if (members.length < 2) {
       toast({
         title: "Error",
@@ -294,6 +344,7 @@ export default function FamilyTreePage() {
   };
 
   const handleNodeDoubleClick = (nodeId: string) => {
+    if (readonly) return;
     setEditingNode(nodeId);
   };
 
@@ -326,9 +377,44 @@ export default function FamilyTreePage() {
     }
   };
 
+  const handleShare = async () => {
+    if (!user?.uid) return;
+    if (!shareEmail) {
+      toast({ title: "Email required", description: "Enter an email." });
+      return;
+    }
+    try {
+      const res = await fetch("/api/family-tree/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerId: user.uid,
+          email: shareEmail,
+          role: shareRole,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Share failed");
+      toast({
+        title: "Shared",
+        description: `Granted ${shareRole} to ${shareEmail}`,
+      });
+      setShareDialogOpen(false);
+      setShareEmail("");
+      setShareRole("viewer");
+    } catch (e: any) {
+      toast({
+        title: "Share failed",
+        description: e?.message || "",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Realtime presence (basic): write self presence and read others
   useEffect(() => {
-    if (!user?.uid) return;
+    const treeOwner = ownerIdParam || user?.uid;
+    if (!user?.uid || !treeOwner) return;
     const viewport = document.getElementById("tree-viewport");
     const updateRect = () => {
       const r = viewport?.getBoundingClientRect();
@@ -340,9 +426,10 @@ export default function FamilyTreePage() {
   }, [user?.uid]);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    const treeOwner = ownerIdParam || user?.uid;
+    if (!user?.uid || !treeOwner) return;
     try {
-      const presCol = collection(db, "familyTrees", user.uid, "presence");
+      const presCol = collection(db, "familyTrees", treeOwner, "presence");
       const unsub = onSnapshot(
         presCol,
         (snap) => {
@@ -360,18 +447,19 @@ export default function FamilyTreePage() {
     } catch (e) {
       // Ignore when rules block presence
     }
-  }, [user?.uid]);
+  }, [user?.uid, ownerIdParam]);
 
   // Track cursor and write to presence (throttled)
   const [lastPresenceWrite, setLastPresenceWrite] = useState<number>(0);
   const writePresence = async (worldX: number, worldY: number) => {
-    if (!user?.uid) return;
+    const treeOwner = ownerIdParam || user?.uid;
+    if (!user?.uid || !treeOwner) return;
     const now = Date.now();
     if (now - lastPresenceWrite < 150) return; // throttle
     setLastPresenceWrite(now);
     try {
       await setDoc(
-        doc(db, "familyTrees", user.uid, "presence", user.uid),
+        doc(db, "familyTrees", treeOwner, "presence", user.uid),
         {
           name: user.displayName || "Me",
           color: "#10b981",
@@ -465,13 +553,24 @@ export default function FamilyTreePage() {
         isFullscreen ? "fixed inset-0 z-50 bg-white" : ""
       }`}
     >
-      <TreeToolbar
-        onAddMember={handleAddMember}
-        onAddRelationship={handleAddRelationship}
-        onExport={handleExport}
-        onToggleFullscreen={handleToggleFullscreen}
-        onOpenSettings={handleOpenSettings}
-      />
+      <div className="flex items-center justify-between px-4 py-2">
+        <div className="flex-1">
+          <TreeToolbar
+            onAddMember={handleAddMember}
+            onAddRelationship={handleAddRelationship}
+            onExport={handleExport}
+            onToggleFullscreen={handleToggleFullscreen}
+            onOpenSettings={handleOpenSettings}
+          />
+        </div>
+        {!ownerIdParam && (
+          <div className="ml-3">
+            <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
+              Share
+            </Button>
+          </div>
+        )}
+      </div>
 
       <div className="flex-1 relative">
         <TreeCanvas
@@ -711,6 +810,53 @@ export default function FamilyTreePage() {
                 {suggestion}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Dialog */}
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share Family Tree</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="shareEmail">Email</Label>
+              <Input
+                id="shareEmail"
+                type="email"
+                value={shareEmail}
+                onChange={(e) => setShareEmail(e.target.value)}
+                placeholder="friend@example.com"
+              />
+            </div>
+            <div>
+              <Label htmlFor="shareRole">Permission</Label>
+              <Select
+                value={shareRole}
+                onValueChange={(v) => setShareRole(v as any)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Viewer (read-only)</SelectItem>
+                  <SelectItem value="editor">Editor (can edit)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleShare} className="flex-1">
+                Share
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShareDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

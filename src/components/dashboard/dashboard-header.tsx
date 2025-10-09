@@ -277,6 +277,12 @@ export function DashboardHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="ml-auto flex-1 sm:flex-initial" />
+        <Button
+          variant="ghost"
+          onClick={() => router.push("/dashboard/shared-trees")}
+        >
+          Shared Trees
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
