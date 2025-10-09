@@ -61,6 +61,8 @@ export default function FamilyTreePage() {
     setError,
     dirty,
     setDirty,
+    undo,
+    redo,
   } = useFamilyTreeStore();
 
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
@@ -634,10 +636,10 @@ export default function FamilyTreePage() {
 
         {/* Right-side floating tools */}
         <div className="absolute right-4 top-24 flex flex-col gap-2 bg-white/90 backdrop-blur rounded-lg p-2 shadow border">
-          <Button variant="outline" size="sm" onClick={onUndo} className="px-2">
+          <Button variant="outline" size="sm" onClick={undo} className="px-2">
             Undo
           </Button>
-          <Button variant="outline" size="sm" onClick={onRedo} className="px-2">
+          <Button variant="outline" size="sm" onClick={redo} className="px-2">
             Redo
           </Button>
           <Button
