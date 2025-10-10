@@ -89,27 +89,57 @@ export function LocationSelector({
   }, [selectedVillage]);
 
   // Get available options based on current selections
-  const provinces = Object.keys(rwandaLocations);
+  // Safety check for rwandaLocations data
+  if (!rwandaLocations || typeof rwandaLocations !== 'object') {
+    console.error('rwandaLocations data is not properly loaded');
+    return (
+      <div className="text-red-500 text-sm">
+        Location data not available. Please refresh the page.
+      </div>
+    );
+  }
+  
+  const provinces = Array.isArray(Object.keys(rwandaLocations)) ? Object.keys(rwandaLocations) : [];
+  
   const districts = selectedProvince
-    ? Object.keys(
-        rwandaLocations[selectedProvince as keyof typeof rwandaLocations] || {}
-      )
+    ? (() => {
+        const provinceData = rwandaLocations[selectedProvince as keyof typeof rwandaLocations];
+        if (provinceData && typeof provinceData === 'object') {
+          const keys = Object.keys(provinceData);
+          return Array.isArray(keys) ? keys : [];
+        }
+        return [];
+      })()
     : [];
+    
   const sectors =
     selectedProvince && selectedDistrict
-      ? Object.keys(
-          rwandaLocations[selectedProvince as keyof typeof rwandaLocations]?.[
-            selectedDistrict as keyof (typeof rwandaLocations)[typeof selectedProvince]
-          ] || {}
-        )
+      ? (() => {
+          const provinceData = rwandaLocations[selectedProvince as keyof typeof rwandaLocations];
+          if (provinceData && typeof provinceData === 'object') {
+            const districtData = provinceData[selectedDistrict as keyof typeof provinceData];
+            if (districtData && typeof districtData === 'object') {
+              const keys = Object.keys(districtData);
+              return Array.isArray(keys) ? keys : [];
+            }
+          }
+          return [];
+        })()
       : [];
+      
   const villages =
     selectedProvince && selectedDistrict && selectedSector
-      ? rwandaLocations[selectedProvince as keyof typeof rwandaLocations]?.[
-          selectedDistrict as keyof (typeof rwandaLocations)[typeof selectedProvince]
-        ]?.[
-          selectedSector as keyof (typeof rwandaLocations)[typeof selectedProvince][typeof selectedDistrict]
-        ] || []
+      ? (() => {
+          const provinceData = rwandaLocations[selectedProvince as keyof typeof rwandaLocations];
+          if (provinceData && typeof provinceData === 'object') {
+            const districtData = provinceData[selectedDistrict as keyof typeof provinceData];
+            if (districtData && typeof districtData === 'object') {
+              const sectorData = districtData[selectedSector as keyof typeof districtData];
+              return Array.isArray(sectorData) ? sectorData : [];
+            }
+          }
+          return [];
+        })()
       : [];
 
   return (
@@ -126,7 +156,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select Province" />
           </SelectTrigger>
           <SelectContent>
-            {(provinces || []).map((prov) => (
+            {Array.isArray(provinces) ? provinces.map((prov) => (
               <SelectItem key={prov} value={prov}>
                 {prov}
               </SelectItem>
@@ -147,7 +177,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select District" />
           </SelectTrigger>
           <SelectContent>
-            {(districts || []).map((dist) => (
+            {Array.isArray(districts) ? districts.map((dist) => (
               <SelectItem key={dist} value={dist}>
                 {dist}
               </SelectItem>
@@ -168,7 +198,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select Sector" />
           </SelectTrigger>
           <SelectContent>
-            {(sectors || []).map((sec) => (
+            {Array.isArray(sectors) ? sectors.map((sec) => (
               <SelectItem key={sec} value={sec}>
                 {sec}
               </SelectItem>
@@ -189,7 +219,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select Village" />
           </SelectTrigger>
           <SelectContent>
-            {(villages || []).map((vil) => (
+            {Array.isArray(villages) ? villages.map((vil) => (
               <SelectItem key={vil} value={vil}>
                 {vil}
               </SelectItem>
