@@ -119,7 +119,7 @@ export function LocationSelector({
       : [];
 
   // Get villages for selected sector
-  const villages =
+  const villagesRaw =
     selectedProvince &&
     selectedDistrict &&
     selectedSector &&
@@ -127,13 +127,22 @@ export function LocationSelector({
       ? rwandaLocations[selectedProvince][selectedDistrict][selectedSector]
       : [];
 
+  // Ensure villages is always an array
+  const villages = Array.isArray(villagesRaw) ? villagesRaw : [];
+
   // Debug log to see what we're getting
   console.log("=== LocationSelector Debug ===");
   console.log("Province:", selectedProvince);
   console.log("District:", selectedDistrict);
   console.log("Sector:", selectedSector);
+  console.log("Villages Raw:", villagesRaw);
+  console.log("Villages Raw type:", typeof villagesRaw);
+  console.log("Villages Raw isArray:", Array.isArray(villagesRaw));
   console.log("Villages:", villages);
+  console.log("Villages type:", typeof villages);
+  console.log("Villages isArray:", Array.isArray(villages));
   console.log("Villages length:", villages?.length);
+  console.log("Villages keys:", villages ? Object.keys(villages) : null);
   console.log("Sectors:", sectors);
   console.log("Sectors length:", sectors?.length);
   console.log(
