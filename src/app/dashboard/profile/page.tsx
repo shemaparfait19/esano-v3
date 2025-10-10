@@ -680,7 +680,7 @@ export default function ProfilePage() {
               Education Information (Optional)
             </h3>
             <div className="space-y-4">
-              {form.education.map((edu, index) => (
+              {(form.education || []).map((edu, index) => (
                 <div key={index} className="border rounded-lg p-4 space-y-4">
                   <div className="flex justify-between items-center">
                     <h4 className="font-medium">Education #{index + 1}</h4>
@@ -916,7 +916,7 @@ export default function ProfilePage() {
               Work/Job Information (Optional)
             </h3>
             <div className="space-y-4">
-              {form.work.map((job, index) => (
+              {(form.work || []).map((job, index) => (
                 <div key={index} className="border rounded-lg p-4 space-y-4">
                   <div className="flex justify-between items-center">
                     <h4 className="font-medium">Job #{index + 1}</h4>

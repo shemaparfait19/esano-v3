@@ -33,6 +33,7 @@ import {
   Download,
   Maximize2,
   Sparkles,
+  Search,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
@@ -123,6 +124,34 @@ export default function FamilyTreePage() {
     if (user?.uid) {
       loadFamilyTree();
     }
+  }, [user?.uid, ownerIdParam]);
+
+  // Load access requests once when user changes
+  useEffect(() => {
+    if (!user?.uid || ownerIdParam) return; // Only for own tree
+
+    const loadAccessRequests = async () => {
+      try {
+        setRequestsLoading(true);
+        const res = await fetch(
+          `/api/family-tree/access-request?ownerId=${user.uid}`
+        );
+        const d = await res.json();
+        if (res.ok && Array.isArray(d.items)) {
+          setAccessRequests(d.items);
+        } else {
+          console.warn("Invalid access requests response:", d);
+          setAccessRequests([]);
+        }
+      } catch (err) {
+        console.error("Failed to load access requests:", err);
+        setAccessRequests([]);
+      } finally {
+        setRequestsLoading(false);
+      }
+    };
+
+    loadAccessRequests();
   }, [user?.uid, ownerIdParam]);
 
   // Lightweight polling to reflect remote edits in near real-time, including shared trees
@@ -246,26 +275,6 @@ export default function FamilyTreePage() {
           setSuggested([]);
         } finally {
           setSuggestedLoading(false);
-        }
-
-        // Load incoming access requests for tree owner
-        try {
-          setRequestsLoading(true);
-          const res = await fetch(
-            `/api/family-tree/access-request?ownerId=${user.uid}`
-          );
-          const d = await res.json();
-          if (res.ok && Array.isArray(d.items)) {
-            setAccessRequests(d.items);
-          } else {
-            console.warn("Invalid access requests response:", d);
-            setAccessRequests([]);
-          }
-        } catch (err) {
-          console.error("Failed to load access requests:", err);
-          setAccessRequests([]);
-        } finally {
-          setRequestsLoading(false);
         }
       }
     } catch (err) {
@@ -938,7 +947,8 @@ export default function FamilyTreePage() {
             </div>
           )}
 
-          {!ownerIdParam && (
+          {/* Only show suggested trees if user has existing tree members */}
+          {!ownerIdParam && tree && (tree?.members?.length || 0) > 0 && (
             <div className="mt-1">
               <div className="text-sm font-medium mb-2">
                 Suggested family trees
@@ -1047,69 +1057,92 @@ export default function FamilyTreePage() {
       {/* New user default view: Start or Join */}
       {(!tree || (tree?.members?.length || 0) === 0) && !ownerIdParam && (
         <div className="flex-none border-b bg-white/60">
-          <div className="px-4 py-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="border rounded-md p-4 bg-white">
-              <div className="font-semibold mb-1">Start Your Own Tree</div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Create your family tree by adding your first member.
+          <div className="px-4 py-6">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-semibold mb-2">
+                Welcome to Family Tree
+              </h2>
+              <p className="text-muted-foreground">
+                Start building your family tree or join an existing one
               </p>
-              <Button size="sm" onClick={handleAddMember}>
-                Add first member
-              </Button>
             </div>
-            <div className="border rounded-md p-4 bg-white">
-              <div className="font-semibold mb-1">Join an Existing Tree</div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Search by family head or owner name, then request access.
-              </p>
-              <div className="flex items-center gap-2 mb-2">
-                <Input
-                  placeholder="Search trees..."
-                  value={joinQuery}
-                  onChange={(e) => setJoinQuery(e.target.value)}
-                />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+              <div className="border rounded-lg p-6 bg-white text-center">
+                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Plus className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold mb-2">Start Your Own Tree</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Create your family tree by adding your first member
+                </p>
+                <Button onClick={handleAddMember} className="w-full">
+                  Add First Member
+                </Button>
               </div>
-              <div className="space-y-2">
-                {joinLoading && (
-                  <div className="text-xs text-muted-foreground">
-                    Searching…
-                  </div>
-                )}
-                {joinResults.slice(0, 6).map((r) => (
-                  <div
-                    key={`${r.ownerId}`}
-                    className="flex items-center justify-between border rounded p-2"
-                  >
-                    <div>
-                      <div className="font-medium text-sm">
-                        {r.headName || "Family Tree"}
+
+              <div className="border rounded-lg p-6 bg-white">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search className="h-6 w-6 text-blue-600" />
+                </div>
+                <h3 className="font-semibold mb-2 text-center">
+                  Join Existing Tree
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4 text-center">
+                  Search and request access to an existing family tree
+                </p>
+                <div className="space-y-3">
+                  <Input
+                    placeholder="Search by family name or owner..."
+                    value={joinQuery}
+                    onChange={(e) => setJoinQuery(e.target.value)}
+                    className="w-full"
+                  />
+                  {joinLoading && (
+                    <div className="text-xs text-muted-foreground text-center">
+                      Searching...
+                    </div>
+                  )}
+                  {joinResults.slice(0, 3).map((r) => (
+                    <div
+                      key={`${r.ownerId}`}
+                      className="flex items-center justify-between border rounded p-3 bg-gray-50"
+                    >
+                      <div>
+                        <div className="font-medium text-sm">
+                          {r.headName || "Family Tree"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {r.ownerName} · {r.membersCount} members
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Owner: {r.ownerName} · {r.membersCount} members
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            handleRequestAccess(r.ownerId, "viewer")
+                          }
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            handleRequestAccess(r.ownerId, "editor")
+                          }
+                        >
+                          Edit
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRequestAccess(r.ownerId, "viewer")}
-                      >
-                        Request View
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleRequestAccess(r.ownerId, "editor")}
-                      >
-                        Request Edit
-                      </Button>
+                  ))}
+                  {!joinLoading && joinQuery && joinResults.length === 0 && (
+                    <div className="text-xs text-muted-foreground text-center">
+                      No trees found matching your search
                     </div>
-                  </div>
-                ))}
-                {!joinLoading && joinQuery && joinResults.length === 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    No trees matched your search.
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>

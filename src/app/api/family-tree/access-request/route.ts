@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
     if (ownerId) q = q.where("ownerId", "==", ownerId);
     if (requesterId) q = q.where("requesterId", "==", requesterId);
 
-    const qs = await q.orderBy("createdAt", "desc").limit(50).get();
+    const qs = await q.limit(50).get();
 
     // If no requests exist, return empty array
     if (qs.empty) {

@@ -136,7 +136,7 @@ export function DnaProfileManager() {
             </p>
           ) : (
             <ul className="space-y-3">
-              {items.map((it) => (
+              {(items || []).map((it) => (
                 <li
                   key={it.id}
                   className="flex items-center justify-between rounded border p-3"

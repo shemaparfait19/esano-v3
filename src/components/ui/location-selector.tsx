@@ -126,7 +126,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select Province" />
           </SelectTrigger>
           <SelectContent>
-            {provinces.map((prov) => (
+            {(provinces || []).map((prov) => (
               <SelectItem key={prov} value={prov}>
                 {prov}
               </SelectItem>
@@ -147,7 +147,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select District" />
           </SelectTrigger>
           <SelectContent>
-            {districts.map((dist) => (
+            {(districts || []).map((dist) => (
               <SelectItem key={dist} value={dist}>
                 {dist}
               </SelectItem>
@@ -168,7 +168,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select Sector" />
           </SelectTrigger>
           <SelectContent>
-            {sectors.map((sec) => (
+            {(sectors || []).map((sec) => (
               <SelectItem key={sec} value={sec}>
                 {sec}
               </SelectItem>
@@ -189,7 +189,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select Village" />
           </SelectTrigger>
           <SelectContent>
-            {villages.map((vil) => (
+            {(villages || []).map((vil) => (
               <SelectItem key={vil} value={vil}>
                 {vil}
               </SelectItem>
