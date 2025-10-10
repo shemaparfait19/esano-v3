@@ -128,30 +128,31 @@ export function LocationSelector({
       : [];
 
   // Debug log to see what we're getting
-  console.log("LocationSelector Debug:", {
-    province: selectedProvince,
-    district: selectedDistrict,
-    sector: selectedSector,
-    villages: villages,
-    villagesLength: villages?.length,
-    villagesType: Array.isArray(villages),
-    sectors: sectors,
-    sectorsLength: sectors?.length,
-    sectorsType: Array.isArray(sectors),
-    rwandaLocationsKeys: Object.keys(rwandaLocations),
-    provinceData: selectedProvince ? rwandaLocations[selectedProvince] : null,
-    districtData:
-      selectedProvince && selectedDistrict
-        ? rwandaLocations[selectedProvince]?.[selectedDistrict]
-        : null,
-    // Test specific path
-    testPath:
-      selectedProvince && selectedDistrict && selectedSector
-        ? rwandaLocations[selectedProvince]?.[selectedDistrict]?.[
-            selectedSector
-          ]
-        : null,
-  });
+  console.log("=== LocationSelector Debug ===");
+  console.log("Province:", selectedProvince);
+  console.log("District:", selectedDistrict);
+  console.log("Sector:", selectedSector);
+  console.log("Villages:", villages);
+  console.log("Villages length:", villages?.length);
+  console.log("Sectors:", sectors);
+  console.log("Sectors length:", sectors?.length);
+  console.log(
+    "Province data:",
+    selectedProvince ? rwandaLocations[selectedProvince] : null
+  );
+  console.log(
+    "District data:",
+    selectedProvince && selectedDistrict
+      ? rwandaLocations[selectedProvince]?.[selectedDistrict]
+      : null
+  );
+  console.log(
+    "Test path:",
+    selectedProvince && selectedDistrict && selectedSector
+      ? rwandaLocations[selectedProvince]?.[selectedDistrict]?.[selectedSector]
+      : null
+  );
+  console.log("=== End Debug ===");
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
