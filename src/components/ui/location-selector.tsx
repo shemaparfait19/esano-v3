@@ -8,7 +8,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import rwandaLocations from "@/data/rwanda-locations.json.json";
+
+// Import the JSON file - adjust the path/name as needed
+import rwandaLocationsData from "@/data/rwanda-locations.json";
+
+// Type for the location data structure
+type VillageData = string[];
+type SectorData = { [sector: string]: VillageData };
+type DistrictData = { [district: string]: SectorData };
+type ProvinceData = { [province: string]: DistrictData };
 
 interface LocationSelectorProps {
   province: string;
@@ -36,6 +44,8 @@ export function LocationSelector({
   const [selectedDistrict, setSelectedDistrict] = useState(district);
   const [selectedSector, setSelectedSector] = useState(sector);
   const [selectedVillage, setSelectedVillage] = useState(village);
+
+  const rwandaLocations = rwandaLocationsData as ProvinceData;
 
   // Reset dependent fields when parent changes
   useEffect(() => {
@@ -88,7 +98,6 @@ export function LocationSelector({
     }
   }, [selectedVillage]);
 
-  // Get available options based on current selections
   // Safety check for rwandaLocations data
   if (!rwandaLocations || typeof rwandaLocations !== "object") {
     console.error("rwandaLocations data is not properly loaded");
@@ -99,62 +108,37 @@ export function LocationSelector({
     );
   }
 
-  const provinces = Array.isArray(Object.keys(rwandaLocations))
-    ? Object.keys(rwandaLocations)
-    : [];
+  // Get provinces
+  const provinces = Object.keys(rwandaLocations);
 
-  const districts = selectedProvince
-    ? (() => {
-        const provinceData =
-          rwandaLocations[selectedProvince as keyof typeof rwandaLocations];
-        if (provinceData && typeof provinceData === "object") {
-          const keys = Object.keys(provinceData);
-          return Array.isArray(keys) ? keys : [];
-        }
-        return [];
-      })()
-    : [];
-
-  const sectors =
-    selectedProvince && selectedDistrict
-      ? (() => {
-          const provinceData =
-            rwandaLocations[selectedProvince as keyof typeof rwandaLocations];
-          if (provinceData && typeof provinceData === "object") {
-            const districtData =
-              provinceData[selectedDistrict as keyof typeof provinceData];
-            if (districtData && typeof districtData === "object") {
-              const keys = Object.keys(districtData);
-              return Array.isArray(keys) ? keys : [];
-            }
-          }
-          return [];
-        })()
+  // Get districts for selected province
+  const districts =
+    selectedProvince && rwandaLocations[selectedProvince]
+      ? Object.keys(rwandaLocations[selectedProvince])
       : [];
 
+  // Get sectors for selected district
+  const sectors =
+    selectedProvince &&
+    selectedDistrict &&
+    rwandaLocations[selectedProvince]?.[selectedDistrict]
+      ? Object.keys(rwandaLocations[selectedProvince][selectedDistrict])
+      : [];
+
+  // Get villages for selected sector
   const villages =
-    selectedProvince && selectedDistrict && selectedSector
-      ? (() => {
-          const provinceData =
-            rwandaLocations[selectedProvince as keyof typeof rwandaLocations];
-          if (provinceData && typeof provinceData === "object") {
-            const districtData =
-              provinceData[selectedDistrict as keyof typeof provinceData];
-            if (districtData && typeof districtData === "object") {
-              const sectorData =
-                districtData[selectedSector as keyof typeof districtData];
-              return Array.isArray(sectorData) ? sectorData : [];
-            }
-          }
-          return [];
-        })()
+    selectedProvince &&
+    selectedDistrict &&
+    selectedSector &&
+    rwandaLocations[selectedProvince]?.[selectedDistrict]?.[selectedSector]
+      ? rwandaLocations[selectedProvince][selectedDistrict][selectedSector]
       : [];
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {/* Province */}
       <div>
-        <label className="text-sm font-medium">Province</label>
+        <label className="text-sm font-medium block mb-1">Province</label>
         <Select
           value={selectedProvince}
           onValueChange={setSelectedProvince}
@@ -164,20 +148,18 @@ export function LocationSelector({
             <SelectValue placeholder="Select Province" />
           </SelectTrigger>
           <SelectContent>
-            {Array.isArray(provinces)
-              ? provinces.map((prov) => (
-                  <SelectItem key={prov} value={prov}>
-                    {prov}
-                  </SelectItem>
-                ))
-              : null}
+            {provinces.map((prov) => (
+              <SelectItem key={prov} value={prov}>
+                {prov}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
       {/* District */}
       <div>
-        <label className="text-sm font-medium">District</label>
+        <label className="text-sm font-medium block mb-1">District</label>
         <Select
           value={selectedDistrict}
           onValueChange={setSelectedDistrict}
@@ -187,20 +169,24 @@ export function LocationSelector({
             <SelectValue placeholder="Select District" />
           </SelectTrigger>
           <SelectContent>
-            {Array.isArray(districts)
-              ? districts.map((dist) => (
-                  <SelectItem key={dist} value={dist}>
-                    {dist}
-                  </SelectItem>
-                ))
-              : null}
+            {districts.length > 0 ? (
+              districts.map((dist) => (
+                <SelectItem key={dist} value={dist}>
+                  {dist}
+                </SelectItem>
+              ))
+            ) : (
+              <div className="text-sm text-gray-500 p-2">
+                No districts available
+              </div>
+            )}
           </SelectContent>
         </Select>
       </div>
 
       {/* Sector */}
       <div>
-        <label className="text-sm font-medium">Sector</label>
+        <label className="text-sm font-medium block mb-1">Sector</label>
         <Select
           value={selectedSector}
           onValueChange={setSelectedSector}
@@ -210,20 +196,24 @@ export function LocationSelector({
             <SelectValue placeholder="Select Sector" />
           </SelectTrigger>
           <SelectContent>
-            {Array.isArray(sectors)
-              ? sectors.map((sec) => (
-                  <SelectItem key={sec} value={sec}>
-                    {sec}
-                  </SelectItem>
-                ))
-              : null}
+            {sectors.length > 0 ? (
+              sectors.map((sec) => (
+                <SelectItem key={sec} value={sec}>
+                  {sec}
+                </SelectItem>
+              ))
+            ) : (
+              <div className="text-sm text-gray-500 p-2">
+                No sectors available
+              </div>
+            )}
           </SelectContent>
         </Select>
       </div>
 
       {/* Village */}
       <div>
-        <label className="text-sm font-medium">Village</label>
+        <label className="text-sm font-medium block mb-1">Village</label>
         <Select
           value={selectedVillage}
           onValueChange={setSelectedVillage}
@@ -233,13 +223,17 @@ export function LocationSelector({
             <SelectValue placeholder="Select Village" />
           </SelectTrigger>
           <SelectContent>
-            {Array.isArray(villages)
-              ? villages.map((vil) => (
-                  <SelectItem key={vil} value={vil}>
-                    {vil}
-                  </SelectItem>
-                ))
-              : null}
+            {villages.length > 0 ? (
+              villages.map((vil) => (
+                <SelectItem key={vil} value={vil}>
+                  {vil}
+                </SelectItem>
+              ))
+            ) : (
+              <div className="text-sm text-gray-500 p-2">
+                No villages available
+              </div>
+            )}
           </SelectContent>
         </Select>
       </div>
