@@ -109,13 +109,26 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const ownerId = searchParams.get("ownerId");
     const requesterId = searchParams.get("requesterId");
+
+    if (!ownerId && !requesterId) {
+      return NextResponse.json({ items: [] });
+    }
+
     let q = adminDb.collection("familyTreeAccessRequests") as any;
     if (ownerId) q = q.where("ownerId", "==", ownerId);
     if (requesterId) q = q.where("requesterId", "==", requesterId);
+
     const qs = await q.orderBy("createdAt", "desc").limit(50).get();
+
+    // If no requests exist, return empty array
+    if (qs.empty) {
+      return NextResponse.json({ items: [] });
+    }
+
     const items = qs.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }));
     return NextResponse.json({ items });
   } catch (e: any) {
+    console.error("Access request list error:", e);
     return NextResponse.json(
       { error: "Failed to list requests", detail: e?.message || "" },
       { status: 500 }

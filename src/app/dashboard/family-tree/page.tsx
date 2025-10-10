@@ -235,8 +235,15 @@ export default function FamilyTreePage() {
           setSuggestedLoading(true);
           const res = await fetch(`/api/family-tree/suggested?limit=12`);
           const d = await res.json();
-          if (res.ok) setSuggested(d.items || []);
-        } catch {
+          if (res.ok && Array.isArray(d.items)) {
+            setSuggested(d.items);
+          } else {
+            console.warn("Invalid suggested trees response:", d);
+            setSuggested([]);
+          }
+        } catch (err) {
+          console.error("Failed to load suggested trees:", err);
+          setSuggested([]);
         } finally {
           setSuggestedLoading(false);
         }
@@ -248,8 +255,15 @@ export default function FamilyTreePage() {
             `/api/family-tree/access-request?ownerId=${user.uid}`
           );
           const d = await res.json();
-          if (res.ok) setAccessRequests(d.items || []);
-        } catch {
+          if (res.ok && Array.isArray(d.items)) {
+            setAccessRequests(d.items);
+          } else {
+            console.warn("Invalid access requests response:", d);
+            setAccessRequests([]);
+          }
+        } catch (err) {
+          console.error("Failed to load access requests:", err);
+          setAccessRequests([]);
         } finally {
           setRequestsLoading(false);
         }
@@ -924,41 +938,53 @@ export default function FamilyTreePage() {
             </div>
           )}
 
-          {!ownerIdParam && suggested.length > 0 && (
+          {!ownerIdParam && (
             <div className="mt-1">
               <div className="text-sm font-medium mb-2">
                 Suggested family trees
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {suggested.map((s) => (
-                  <div
-                    key={`${s.ownerId}`}
-                    className="border rounded-md p-3 bg-white"
-                  >
-                    <div className="font-semibold">
-                      {s.headName || "Family Tree"}
+              {suggestedLoading ? (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              ) : suggested.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {suggested.map((s) => (
+                    <div
+                      key={`${s.ownerId}`}
+                      className="border rounded-md p-3 bg-white"
+                    >
+                      <div className="font-semibold">
+                        {s.headName || "Family Tree"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Owner: {s.ownerName} · {s.membersCount} members
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            handleRequestAccess(s.ownerId, "viewer")
+                          }
+                        >
+                          Request View
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            handleRequestAccess(s.ownerId, "editor")
+                          }
+                        >
+                          Request Edit
+                        </Button>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Owner: {s.ownerName} · {s.membersCount} members
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRequestAccess(s.ownerId, "viewer")}
-                      >
-                        Request View
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleRequestAccess(s.ownerId, "editor")}
-                      >
-                        Request Edit
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  No suggested trees available
+                </div>
+              )}
             </div>
           )}
 

@@ -64,20 +64,110 @@ export function TreeCanvas({
     updateMember,
   } = useFamilyTreeStore();
 
-  // ===== Build layout with independent node positions
-  const buildLayoutFromPositions = () => {
-    const sorted = [...members].sort((a, b) =>
-      (a.id || "").localeCompare(b.id || "")
-    );
+  // ===== Build hierarchical layout like the reference image
+  const buildHierarchicalLayout = () => {
     const nodeWidth = 200;
     const nodeHeight = 100;
-    const gridX = 280;
-    const gridY = 180;
+    const horizontalSpacing = 300;
+    const verticalSpacing = 200;
 
-    const nodes = sorted.map((m, i) => {
-      const x = typeof m.x === "number" ? m.x : 150 + (i % 4) * gridX;
-      const y = typeof m.y === "number" ? m.y : 150 + Math.floor(i / 4) * gridY;
-      return { id: m.id, x, y, width: nodeWidth, height: nodeHeight };
+    // Find the focal person (head of family or first member)
+    const focalPerson = members.find((m) => m.isHeadOfFamily) || members[0];
+    if (!focalPerson) return { nodes: [], edges: [] };
+
+    const nodes: any[] = [];
+    const visited = new Set<string>();
+
+    // Position focal person in center
+    const centerX = canvasState.width / 2;
+    const centerY = canvasState.height / 2;
+
+    const addNode = (member: any, x: number, y: number, generation: number) => {
+      if (visited.has(member.id)) return;
+      visited.add(member.id);
+
+      nodes.push({
+        id: member.id,
+        x,
+        y,
+        width: nodeWidth,
+        height: nodeHeight,
+        generation,
+        member,
+      });
+    };
+
+    // Start with focal person
+    addNode(focalPerson, centerX - nodeWidth / 2, centerY - nodeHeight / 2, 0);
+
+    // Build family tree hierarchically
+    const buildFamily = (
+      member: any,
+      centerX: number,
+      centerY: number,
+      generation: number
+    ) => {
+      // Find parents
+      const parents = edges
+        .filter((e) => e.toId === member.id && e.type === "parent")
+        .map((e) => members.find((m) => m.id === e.fromId))
+        .filter(Boolean);
+
+      // Find children
+      const children = edges
+        .filter((e) => e.fromId === member.id && e.type === "parent")
+        .map((e) => members.find((m) => m.id === e.toId))
+        .filter(Boolean);
+
+      // Position parents above
+      if (parents.length > 0) {
+        const parentY = centerY - verticalSpacing;
+        const startX = centerX - ((parents.length - 1) * horizontalSpacing) / 2;
+
+        parents.forEach((parent, i) => {
+          if (parent && !visited.has(parent.id)) {
+            const parentX = startX + i * horizontalSpacing;
+            addNode(
+              parent,
+              parentX - nodeWidth / 2,
+              parentY - nodeHeight / 2,
+              generation - 1
+            );
+            buildFamily(parent, parentX, parentY, generation - 1);
+          }
+        });
+      }
+
+      // Position children below
+      if (children.length > 0) {
+        const childY = centerY + verticalSpacing;
+        const startX =
+          centerX - ((children.length - 1) * horizontalSpacing) / 2;
+
+        children.forEach((child, i) => {
+          if (child && !visited.has(child.id)) {
+            const childX = startX + i * horizontalSpacing;
+            addNode(
+              child,
+              childX - nodeWidth / 2,
+              childY - nodeHeight / 2,
+              generation + 1
+            );
+            buildFamily(child, childX, childY, generation + 1);
+          }
+        });
+      }
+    };
+
+    buildFamily(focalPerson, centerX, centerY, 0);
+
+    // Add any remaining members (spouses, etc.) in a grid
+    members.forEach((member, i) => {
+      if (!visited.has(member.id)) {
+        const x = 50 + (i % 6) * horizontalSpacing;
+        const y = 50 + Math.floor(i / 6) * verticalSpacing;
+        addNode(member, x, y, 999);
+      }
     });
 
     const nodeById: Record<string, any> = Object.fromEntries(
@@ -402,7 +492,7 @@ export function TreeCanvas({
     ctx.translate(canvasState.panX, canvasState.panY);
     ctx.scale(canvasState.zoom, canvasState.zoom);
 
-    const localLayout = buildLayoutFromPositions();
+    const localLayout = buildHierarchicalLayout();
     renderEdges(ctx, localLayout.edges as any[]);
     renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
 
@@ -441,7 +531,7 @@ export function TreeCanvas({
 
   // ===== Get node at position
   const getNodeAtPosition = (worldX: number, worldY: number) => {
-    const localLayout = buildLayoutFromPositions();
+    const localLayout = buildHierarchicalLayout();
     return localLayout.nodes.find(
       (node) =>
         worldX >= node.x &&
@@ -453,7 +543,7 @@ export function TreeCanvas({
 
   // Hit-test edges for hover tooltip
   const getEdgeAtPosition = (worldX: number, worldY: number) => {
-    const { edges: epaths } = buildLayoutFromPositions();
+    const { edges: epaths } = buildHierarchicalLayout();
     const radius = 6; // hover tolerance
     for (const e of epaths) {
       if (!e.path) continue;
