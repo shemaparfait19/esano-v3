@@ -27,8 +27,10 @@ interface FamilyTreeState {
   editingNode: string | null;
   isFullscreen: boolean;
   isLoading: boolean;
+  isSaving: boolean;
   error: string | null;
   dirty: boolean;
+  lastSavedAt?: string;
 
   // History (session-only)
   past: FamilyTree[];
@@ -59,8 +61,10 @@ interface FamilyTreeState {
   setEditingNode: (nodeId: string | null) => void;
   setFullscreen: (fullscreen: boolean) => void;
   setLoading: (loading: boolean) => void;
+  setSaving: (saving: boolean) => void;
   setError: (error: string | null) => void;
   setDirty: (dirty: boolean) => void;
+  setLastSavedAt: (iso?: string) => void;
 
   // Computed selectors
   getMember: (id: string) => FamilyMember | undefined;
@@ -93,6 +97,7 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
     editingNode: null,
     isFullscreen: false,
     isLoading: false,
+    isSaving: false,
     error: null,
     dirty: false,
     past: [],
@@ -342,8 +347,10 @@ export const useFamilyTreeStore = create<FamilyTreeState>()(
     setEditingNode: (nodeId) => set({ editingNode: nodeId }),
     setFullscreen: (fullscreen) => set({ isFullscreen: fullscreen }),
     setLoading: (loading) => set({ isLoading: loading }),
+    setSaving: (saving) => set({ isSaving: saving }),
     setError: (error) => set({ error }),
     setDirty: (dirty) => set({ dirty }),
+    setLastSavedAt: (iso) => set({ lastSavedAt: iso }),
 
     // Computed selectors
     getMember: (id) => get().members.find((member) => member.id === id),

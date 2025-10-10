@@ -529,8 +529,14 @@ export function TreeCanvas({
   };
 
   const handleMouseUp = () => {
+    const wasDraggingNode = !!draggingNode;
     setIsDraggingCanvas(false);
     setDraggingNode(null);
+
+    // After moving a node, tidy the layout to keep things neat
+    if (wasDraggingNode) {
+      tidyLayout();
+    }
   };
 
   // ===== Touch events (mobile)
@@ -579,8 +585,80 @@ export function TreeCanvas({
   };
 
   const handleTouchEnd = () => {
+    const wasDraggingNode = !!draggingNode;
     setIsDraggingCanvas(false);
     setDraggingNode(null);
+    if (wasDraggingNode) {
+      tidyLayout();
+    }
+  };
+
+  // ===== Tidy layout: compute generations and distribute nodes per row
+  const tidyLayout = () => {
+    // Assign generation levels based on parent -> child edges
+    const parentMap: Record<string, string[]> = {};
+    const childMap: Record<string, string[]> = {};
+    edges.forEach((e) => {
+      if (e.type === "parent") {
+        parentMap[e.toId] = parentMap[e.toId] || [];
+        parentMap[e.toId].push(e.fromId);
+        childMap[e.fromId] = childMap[e.fromId] || [];
+        childMap[e.fromId].push(e.toId);
+      }
+    });
+
+    const level: Record<string, number> = {};
+    const roots = members.filter(
+      (m) => !(parentMap[m.id!] && parentMap[m.id!].length)
+    );
+    const queue: string[] = [];
+    roots.forEach((r) => {
+      level[r.id!] = 0;
+      queue.push(r.id!);
+    });
+    while (queue.length) {
+      const cur = queue.shift()!;
+      const children = childMap[cur] || [];
+      children.forEach((c) => {
+        const next = (level[cur] || 0) + 1;
+        if (!(c in level) || next > level[c]) {
+          level[c] = next;
+          queue.push(c);
+        }
+      });
+    }
+
+    // Fallback for isolated nodes
+    members.forEach((m) => {
+      if (!(m.id! in level)) level[m.id!] = 0;
+    });
+
+    // Group by level and compute positions
+    const spacingX = 260;
+    const spacingY = 170;
+    const marginX = 120;
+    const marginY = 120;
+    const levels: Record<number, FamilyMember[]> = {};
+    members.forEach((m) => {
+      const lv = level[m.id!] || 0;
+      (levels[lv] = levels[lv] || []).push(m);
+    });
+
+    Object.keys(levels)
+      .map((k) => parseInt(k, 10))
+      .sort((a, b) => a - b)
+      .forEach((lv) => {
+        const row = levels[lv];
+        // keep rough order by current x to reduce jumps
+        row.sort((a, b) => (a.x || 0) - (b.x || 0));
+        row.forEach((m, idx) => {
+          const targetX = Math.round((marginX + idx * spacingX) / 10) * 10; // snap 10px
+          const targetY = Math.round((marginY + lv * spacingY) / 10) * 10;
+          if (m.x !== targetX || m.y !== targetY) {
+            updateMember(m.id!, { ...m, x: targetX, y: targetY });
+          }
+        });
+      });
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {

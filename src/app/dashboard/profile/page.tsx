@@ -24,6 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { saveUserDna, analyzeDna } from "@/app/actions";
 import { DnaProfileManager } from "@/components/dashboard/dna-profile-manager";
+import { LocationSelector } from "@/components/ui/location-selector";
 import {
   User,
   Calendar,
@@ -505,70 +506,25 @@ export default function ProfilePage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium">Province</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.province}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, province: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">District</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.district}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, district: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Sector</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.sector}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, sector: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Cell</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.cell}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, cell: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium">Village</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.village}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, village: e.target.value }))
-                    }
-                  />
-                </div>
+              <div className="md:col-span-4">
+                <label className="text-sm font-medium mb-2 block">
+                  Birth Location
+                </label>
+                <LocationSelector
+                  province={form.province}
+                  district={form.district}
+                  sector={form.sector}
+                  village={form.village}
+                  onLocationChange={(location) =>
+                    setForm((f) => ({
+                      ...f,
+                      province: location.province,
+                      district: location.district,
+                      sector: location.sector,
+                      village: location.village,
+                    }))
+                  }
+                />
               </div>
               <div>
                 <label className="text-sm font-medium">
@@ -681,88 +637,26 @@ export default function ProfilePage() {
             <h3 className="font-headline text-lg text-primary mb-4">
               Residence Information (Optional)
             </h3>
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Province</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.residenceProvince}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        residenceProvince: e.target.value,
-                      }))
-                    }
-                    placeholder="e.g., Kigali"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">District</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.residenceDistrict}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        residenceDistrict: e.target.value,
-                      }))
-                    }
-                    placeholder="e.g., Gasabo"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Sector</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.residenceSector}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        residenceSector: e.target.value,
-                      }))
-                    }
-                    placeholder="e.g., Kimisagara"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Cell</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.residenceCell}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, residenceCell: e.target.value }))
-                    }
-                    placeholder="e.g., Kimisagara"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Village</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-10"
-                    value={form.residenceVillage}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        residenceVillage: e.target.value,
-                      }))
-                    }
-                    placeholder="e.g., Kagugu"
-                  />
-                </div>
+                <label className="text-sm font-medium mb-2 block">
+                  Residence Location
+                </label>
+                <LocationSelector
+                  province={form.residenceProvince}
+                  district={form.residenceDistrict}
+                  sector={form.residenceSector}
+                  village={form.residenceVillage}
+                  onLocationChange={(location) =>
+                    setForm((f) => ({
+                      ...f,
+                      residenceProvince: location.province,
+                      residenceDistrict: location.district,
+                      residenceSector: location.sector,
+                      residenceVillage: location.village,
+                    }))
+                  }
+                />
               </div>
               <div>
                 <label className="text-sm font-medium">Street Name</label>
