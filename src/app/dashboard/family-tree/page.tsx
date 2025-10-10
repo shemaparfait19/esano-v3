@@ -157,15 +157,33 @@ export default function FamilyTreePage() {
   // Lightweight polling to reflect remote edits in near real-time, including shared trees
   useEffect(() => {
     if (!user?.uid) return;
-    const interval = setInterval(() => {
-      if (!dirty && !isLoading) {
-        loadFamilyTree();
-      }
-    }, 3000);
-    return () => clearInterval(interval);
+
+    // Only poll if user is actively viewing the page (not minimized/hidden)
+    const isPageVisible = () => !document.hidden;
+
+    // Disable polling for now to prevent blinking - can be re-enabled later with better optimization
+    // const interval = setInterval(() => {
+    //   // Only refresh if page is visible, not dirty, and not already loading
+    //   if (isPageVisible() && !dirty && !isLoading) {
+    //     loadFamilyTree();
+    //   }
+    // }, 10000); // Reduced from 3s to 10s to reduce blinking
+
+    // return () => clearInterval(interval);
   }, [user?.uid, ownerIdParam, dirty, isLoading]);
 
+  // Add debounce to prevent rapid successive calls
+  const [lastLoadTime, setLastLoadTime] = useState(0);
+
   const loadFamilyTree = async () => {
+    const now = Date.now();
+    // Prevent loading if called within last 5 seconds
+    if (now - lastLoadTime < 5000) {
+      console.log("Skipping loadFamilyTree - too soon");
+      return;
+    }
+    setLastLoadTime(now);
+
     try {
       setLoading(true);
       setError(null);
