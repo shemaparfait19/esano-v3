@@ -139,6 +139,13 @@ export function LocationSelector({
       selectedProvince && selectedDistrict
         ? rwandaLocations[selectedProvince]?.[selectedDistrict]
         : null,
+    // Test specific path
+    testPath:
+      selectedProvince && selectedDistrict && selectedSector
+        ? rwandaLocations[selectedProvince]?.[selectedDistrict]?.[
+            selectedSector
+          ]
+        : null,
   });
 
   return (

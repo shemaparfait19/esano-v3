@@ -14,6 +14,13 @@ export async function GET(request: NextRequest) {
     // naive scan (for demo); production should use Algolia/ES or structured fields
     const qs = await adminDb.collection("familyTrees").limit(200).get();
     console.log(`Searching for "${q}", found ${qs.docs.length} trees to check`);
+
+    // If no trees exist, return empty array
+    if (qs.empty) {
+      console.log("No family trees found in database");
+      return NextResponse.json({ items: [] });
+    }
+
     const items: any[] = [];
     for (const doc of qs.docs) {
       const t = doc.data() as any;
@@ -68,9 +75,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items });
   } catch (e: any) {
-    console.error("Search error:", e); // Added logging for debugging
+    console.error("Search error:", e);
+    console.error("Error stack:", e?.stack);
     return NextResponse.json(
-      { error: "Search failed", detail: e?.message || "" },
+      {
+        error: "Search failed",
+        detail: e?.message || "Unknown error",
+        stack: e?.stack,
+      },
       { status: 500 }
     );
   }
