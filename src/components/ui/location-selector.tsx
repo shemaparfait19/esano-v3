@@ -59,7 +59,12 @@ export function LocationSelector({
 
   // Update parent when district changes
   useEffect(() => {
+    console.log("District useEffect triggered:", {
+      selectedDistrict,
+      district,
+    });
     if (selectedDistrict !== district) {
+      console.log("Calling onLocationChange with district:", selectedDistrict);
       setSelectedSector("");
       setSelectedVillage("");
       onLocationChange({
@@ -69,7 +74,7 @@ export function LocationSelector({
         village: "",
       });
     }
-  }, [selectedDistrict]);
+  }, [selectedDistrict, district, selectedProvince, onLocationChange]);
 
   // Update parent when sector changes
   useEffect(() => {
@@ -176,7 +181,10 @@ export function LocationSelector({
         <label className="text-sm font-medium block mb-1">District</label>
         <Select
           value={selectedDistrict}
-          onValueChange={setSelectedDistrict}
+          onValueChange={(value) => {
+            console.log("District selected:", value);
+            setSelectedDistrict(value);
+          }}
           disabled={disabled || !selectedProvince}
         >
           <SelectTrigger>

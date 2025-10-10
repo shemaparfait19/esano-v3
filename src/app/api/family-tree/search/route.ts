@@ -34,6 +34,16 @@ export async function GET(request: NextRequest) {
         .toLowerCase();
       const treeName = (t.title || t.familyName || "").toLowerCase();
 
+      // Skip if ownerId is invalid
+      if (
+        !t.ownerId ||
+        typeof t.ownerId !== "string" ||
+        t.ownerId.trim() === ""
+      ) {
+        console.log(`Skipping tree ${doc.id} - invalid ownerId: ${t.ownerId}`);
+        continue;
+      }
+
       const ownerSnap = await adminDb.collection("users").doc(t.ownerId).get();
       const owner = ownerSnap.exists ? (ownerSnap.data() as any) : null;
 
