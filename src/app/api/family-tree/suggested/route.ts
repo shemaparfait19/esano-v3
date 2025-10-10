@@ -11,9 +11,11 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "10", 10), 30);
 
     const qs = await adminDb.collection("familyTrees").limit(limit).get();
+    console.log(`Suggested trees: found ${qs.docs.length} trees`);
 
     // If no trees exist, return empty array
     if (qs.empty) {
+      console.log("No family trees found in database");
       return NextResponse.json({ items: [] });
     }
 

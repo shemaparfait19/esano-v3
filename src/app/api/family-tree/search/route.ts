@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
 
     // naive scan (for demo); production should use Algolia/ES or structured fields
     const qs = await adminDb.collection("familyTrees").limit(200).get();
+    console.log(`Searching for "${q}", found ${qs.docs.length} trees to check`);
     const items: any[] = [];
     for (const doc of qs.docs) {
       const t = doc.data() as any;
@@ -45,6 +46,9 @@ export async function GET(request: NextRequest) {
         treeName.includes(q) ||
         ownerName.includes(q)
       ) {
+        console.log(
+          `Match found: headName="${headName}", treeName="${treeName}", ownerName="${ownerName}"`
+        );
         items.push({
           ownerId: t.ownerId,
           headName:

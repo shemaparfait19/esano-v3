@@ -442,10 +442,12 @@ export default function FamilyTreePage() {
     const t = setTimeout(async () => {
       try {
         setJoinLoading(true);
+        console.log(`Searching for: "${q}"`);
         const res = await fetch(
           `/api/family-tree/search?q=${encodeURIComponent(q)}&limit=12`
         );
         const d = await res.json();
+        console.log(`Search response:`, d);
         if (res.ok) setJoinResults(d.items || []);
       } catch {
       } finally {

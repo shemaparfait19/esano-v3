@@ -123,13 +123,22 @@ export function LocationSelector({
       : [];
 
   // Debug log to see what we're getting
-  console.log("Selected values:", {
+  console.log("LocationSelector Debug:", {
     province: selectedProvince,
     district: selectedDistrict,
     sector: selectedSector,
     villages: villages,
     villagesLength: villages?.length,
     villagesType: Array.isArray(villages),
+    sectors: sectors,
+    sectorsLength: sectors?.length,
+    sectorsType: Array.isArray(sectors),
+    rwandaLocationsKeys: Object.keys(rwandaLocations),
+    provinceData: selectedProvince ? rwandaLocations[selectedProvince] : null,
+    districtData:
+      selectedProvince && selectedDistrict
+        ? rwandaLocations[selectedProvince]?.[selectedDistrict]
+        : null,
   });
 
   return (
