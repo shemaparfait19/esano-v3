@@ -9,14 +9,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Import the JSON file - adjust the path/name as needed
+// Import your JSON file - make sure the path matches your file exactly
 import rwandaLocationsData from "@/data/rwanda-locations.json";
-
-// Type for the location data structure
-type VillageData = string[];
-type SectorData = { [sector: string]: VillageData };
-type DistrictData = { [district: string]: SectorData };
-type ProvinceData = { [province: string]: DistrictData };
 
 interface LocationSelectorProps {
   province: string;
@@ -45,9 +39,10 @@ export function LocationSelector({
   const [selectedSector, setSelectedSector] = useState(sector);
   const [selectedVillage, setSelectedVillage] = useState(village);
 
-  const rwandaLocations = rwandaLocationsData as ProvinceData;
+  // Cast to any to avoid TypeScript issues
+  const rwandaLocations = rwandaLocationsData as any;
 
-  // Reset dependent fields when parent changes
+  // Update parent when province changes
   useEffect(() => {
     if (selectedProvince !== province) {
       setSelectedDistrict("");
@@ -62,6 +57,7 @@ export function LocationSelector({
     }
   }, [selectedProvince]);
 
+  // Update parent when district changes
   useEffect(() => {
     if (selectedDistrict !== district) {
       setSelectedSector("");
@@ -75,6 +71,7 @@ export function LocationSelector({
     }
   }, [selectedDistrict]);
 
+  // Update parent when sector changes
   useEffect(() => {
     if (selectedSector !== sector) {
       setSelectedVillage("");
@@ -87,6 +84,7 @@ export function LocationSelector({
     }
   }, [selectedSector]);
 
+  // Update parent when village changes
   useEffect(() => {
     if (selectedVillage !== village) {
       onLocationChange({
@@ -98,18 +96,8 @@ export function LocationSelector({
     }
   }, [selectedVillage]);
 
-  // Safety check for rwandaLocations data
-  if (!rwandaLocations || typeof rwandaLocations !== "object") {
-    console.error("rwandaLocations data is not properly loaded");
-    return (
-      <div className="text-red-500 text-sm">
-        Location data not available. Please refresh the page.
-      </div>
-    );
-  }
-
   // Get provinces
-  const provinces = Object.keys(rwandaLocations);
+  const provinces = rwandaLocations ? Object.keys(rwandaLocations) : [];
 
   // Get districts for selected province
   const districts =
@@ -133,6 +121,16 @@ export function LocationSelector({
     rwandaLocations[selectedProvince]?.[selectedDistrict]?.[selectedSector]
       ? rwandaLocations[selectedProvince][selectedDistrict][selectedSector]
       : [];
+
+  // Debug log to see what we're getting
+  console.log("Selected values:", {
+    province: selectedProvince,
+    district: selectedDistrict,
+    sector: selectedSector,
+    villages: villages,
+    villagesLength: villages?.length,
+    villagesType: Array.isArray(villages),
+  });
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -177,7 +175,9 @@ export function LocationSelector({
               ))
             ) : (
               <div className="text-sm text-gray-500 p-2">
-                No districts available
+                {selectedProvince
+                  ? "No districts available"
+                  : "Select a province first"}
               </div>
             )}
           </SelectContent>
@@ -204,7 +204,9 @@ export function LocationSelector({
               ))
             ) : (
               <div className="text-sm text-gray-500 p-2">
-                No sectors available
+                {selectedDistrict
+                  ? "No sectors available"
+                  : "Select a district first"}
               </div>
             )}
           </SelectContent>
@@ -223,7 +225,7 @@ export function LocationSelector({
             <SelectValue placeholder="Select Village" />
           </SelectTrigger>
           <SelectContent>
-            {villages.length > 0 ? (
+            {Array.isArray(villages) && villages.length > 0 ? (
               villages.map((vil) => (
                 <SelectItem key={vil} value={vil}>
                   {vil}
@@ -231,7 +233,9 @@ export function LocationSelector({
               ))
             ) : (
               <div className="text-sm text-gray-500 p-2">
-                No villages available
+                {selectedSector
+                  ? "No villages available"
+                  : "Select a sector first"}
               </div>
             )}
           </SelectContent>
