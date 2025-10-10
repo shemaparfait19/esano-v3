@@ -1174,13 +1174,35 @@ export default function FamilyTreePage() {
         id="tree-viewport"
         className="flex-1 relative overflow-hidden bg-gray-50"
       >
-        <TreeCanvas
-          onNodeClick={handleNodeClick}
-          onNodeDoubleClick={handleNodeDoubleClick}
-          onCanvasClick={handleCanvasClick}
-          presence={presence}
-          className="w-full h-full"
-        />
+        {/* Debug info */}
+        <div className="absolute top-2 left-2 z-10 bg-black/80 text-white text-xs p-2 rounded">
+          Tree: {tree ? "Loaded" : "Not loaded"} | Members:{" "}
+          {tree?.members?.length || 0} | Loading: {isLoading ? "Yes" : "No"} |
+          Error: {error || "None"}
+        </div>
+
+        {tree && tree.members && tree.members.length > 0 ? (
+          <TreeCanvas
+            onNodeClick={handleNodeClick}
+            onNodeDoubleClick={handleNodeDoubleClick}
+            onCanvasClick={handleCanvasClick}
+            presence={presence}
+            className="w-full h-full"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">No Family Members</h3>
+              <p className="text-muted-foreground mb-4">
+                Start building your family tree by adding your first member.
+              </p>
+              <Button onClick={handleAddMember} disabled={readonly}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add First Member
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Mobile Floating Action Button */}
         <div className="sm:hidden absolute bottom-4 right-4 flex flex-col gap-2">
