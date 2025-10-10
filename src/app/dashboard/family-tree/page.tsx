@@ -111,6 +111,7 @@ export default function FamilyTreePage() {
   );
   const [suggested, setSuggested] = useState<Array<any>>([]);
   const [suggestedLoading, setSuggestedLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [askText, setAskText] = useState("");
   const [askAnswer, setAskAnswer] = useState<string>("");
   const [joinQuery, setJoinQuery] = useState("");
@@ -967,53 +968,69 @@ export default function FamilyTreePage() {
             </div>
           )}
 
-          {/* Only show suggested trees if user has existing tree members */}
+          {/* Collapsible suggested trees section */}
           {!ownerIdParam && tree && (tree?.members?.length || 0) > 0 && (
             <div className="mt-1">
-              <div className="text-sm font-medium mb-2">
-                Suggested family trees
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">
+                  Suggested family trees ({suggested.length})
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSuggestions(!showSuggestions)}
+                  className="text-xs"
+                >
+                  {showSuggestions ? "Hide" : "Show"} Suggestions
+                </Button>
               </div>
-              {suggestedLoading ? (
-                <div className="text-sm text-muted-foreground">Loading...</div>
-              ) : suggested.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {suggested.map((s) => (
-                    <div
-                      key={`${s.ownerId}`}
-                      className="border rounded-md p-3 bg-white"
-                    >
-                      <div className="font-semibold">
-                        {s.headName || "Family Tree"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Owner: {s.ownerName} · {s.membersCount} members
-                      </div>
-                      <div className="mt-2 flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleRequestAccess(s.ownerId, "viewer")
-                          }
-                        >
-                          Request View
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            handleRequestAccess(s.ownerId, "editor")
-                          }
-                        >
-                          Request Edit
-                        </Button>
-                      </div>
+              {showSuggestions && (
+                <>
+                  {suggestedLoading ? (
+                    <div className="text-sm text-muted-foreground">
+                      Loading...
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  No suggested trees available
-                </div>
+                  ) : suggested.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                      {suggested.map((s) => (
+                        <div
+                          key={`${s.ownerId}`}
+                          className="border rounded-md p-3 bg-white"
+                        >
+                          <div className="font-semibold">
+                            {s.headName || "Family Tree"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Owner: {s.ownerName} · {s.membersCount} members
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                handleRequestAccess(s.ownerId, "viewer")
+                              }
+                            >
+                              Request View
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                handleRequestAccess(s.ownerId, "editor")
+                              }
+                            >
+                              Request Edit
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      No suggested trees available
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
