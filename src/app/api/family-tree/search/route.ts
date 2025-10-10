@@ -28,11 +28,14 @@ export async function GET(request: NextRequest) {
 
       const ownerSnap = await adminDb.collection("users").doc(t.ownerId).get();
       const owner = ownerSnap.exists ? (ownerSnap.data() as any) : null;
+
+      // ✅ Fixed: Safely handle undefined values
       const ownerName = (
         owner?.fullName ||
         owner?.preferredName ||
         owner?.firstName ||
-        t.ownerId
+        t.ownerId ||
+        ""
       )
         .toString()
         .toLowerCase();
@@ -61,6 +64,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items });
   } catch (e: any) {
+    console.error("Search error:", e); // Added logging for debugging
     return NextResponse.json(
       { error: "Search failed", detail: e?.message || "" },
       { status: 500 }
