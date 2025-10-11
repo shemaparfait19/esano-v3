@@ -155,7 +155,7 @@ export function DashboardHeader() {
     const ref = collection(db, "familyTreeAccessRequests");
     const q = query(
       ref,
-      where("treeOwnerId", "==", user.uid),
+      where("ownerId", "==", user.uid),
       where("status", "==", "pending")
     );
     const unsub = onSnapshot(
@@ -268,7 +268,7 @@ export function DashboardHeader() {
                   <RequesterName userId={r.requesterId} />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Role: {r.requestedRole} •{" "}
+                  Role: {r.access} •{" "}
                   {new Date(
                     r.createdAt?.toDate?.() || r.createdAt
                   ).toLocaleDateString()}
@@ -280,7 +280,7 @@ export function DashboardHeader() {
                       await fetch("/api/family-tree/access-request", {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ id: r.id, status: "accepted" }),
+                        body: JSON.stringify({ id: r.id, decision: "accept" }),
                       });
                     }}
                   >
@@ -293,7 +293,7 @@ export function DashboardHeader() {
                       await fetch("/api/family-tree/access-request", {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ id: r.id, status: "denied" }),
+                        body: JSON.stringify({ id: r.id, decision: "deny" }),
                       });
                     }}
                   >
