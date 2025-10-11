@@ -647,7 +647,7 @@ export default function FamilyTreePage() {
         });
         return;
       }
-      const dataUrl = canvas.toDataDataURL("image/png");
+      const dataUrl = canvas.toDataURL("image/png");
       const a = document.createElement("a");
       a.href = dataUrl;
       a.download = `family-tree-${new Date().toISOString()}.png`;
@@ -1126,129 +1126,131 @@ export default function FamilyTreePage() {
                     </Button>
                   </div>
 
-              <div className="border rounded-lg p-6 bg-white">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Search className="h-6 w-6 text-blue-600" />
-                </div>
-                <h3 className="font-semibold mb-2 text-center">
-                  Join Existing Tree
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4 text-center">
-                  Search and request access to an existing family tree
-                </p>
-                <div className="space-y-3">
-                  <Input
-                    placeholder="Search by family name or owner..."
-                    value={joinQuery}
-                    onChange={(e) => setJoinQuery(e.target.value)}
-                    className="w-full"
-                  />
-                  {joinLoading && (
-                    <div className="text-xs text-muted-foreground text-center">
-                      Searching...
+                  <div className="border rounded-lg p-6 bg-white">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Search className="h-6 w-6 text-blue-600" />
                     </div>
-                  )}
-                  {joinResults.slice(0, 3).map((r) => (
-                    <div
-                      key={`${r.ownerId}`}
-                      className="flex items-center justify-between border rounded p-3 bg-gray-50"
-                    >
-                      <div>
-                        <div className="font-medium text-sm">
-                          {r.headName || "Family Tree"}
+                    <h3 className="font-semibold mb-2 text-center">
+                      Join Existing Tree
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-4 text-center">
+                      Search and request access to an existing family tree
+                    </p>
+                    <div className="space-y-3">
+                      <Input
+                        placeholder="Search by family name or owner..."
+                        value={joinQuery}
+                        onChange={(e) => setJoinQuery(e.target.value)}
+                        className="w-full"
+                      />
+                      {joinLoading && (
+                        <div className="text-xs text-muted-foreground text-center">
+                          Searching...
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {r.ownerName} · {r.membersCount} members
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleRequestAccess(r.ownerId, "viewer")
-                          }
-                        >
-                          View
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            handleRequestAccess(r.ownerId, "editor")
-                          }
-                        >
-                          Edit
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                  {!joinLoading && joinQuery && joinResults.length === 0 && (
-                    <div className="text-xs text-muted-foreground text-center">
-                      No trees found matching your search
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Interesting Suggestions Button */}
-            <div className="mt-6 text-center">
-              <Button
-                variant="outline"
-                onClick={() => setShowSuggestions(!showSuggestions)}
-                className="text-sm"
-              >
-                {showSuggestions ? "Hide" : "Show"} Interesting Family Trees
-              </Button>
-              {showSuggestions && (
-                <div className="mt-4">
-                  {suggestedLoading ? (
-                    <div className="text-sm text-muted-foreground">
-                      Loading...
-                    </div>
-                  ) : suggested.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
-                      {suggested.map((s) => (
+                      )}
+                      {joinResults.slice(0, 3).map((r) => (
                         <div
-                          key={`${s.ownerId}`}
-                          className="border rounded-md p-3 bg-white"
+                          key={`${r.ownerId}`}
+                          className="flex items-center justify-between border rounded p-3 bg-gray-50"
                         >
-                          <div className="font-semibold">
-                            {s.headName || "Family Tree"}
+                          <div>
+                            <div className="font-medium text-sm">
+                              {r.headName || "Family Tree"}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {r.ownerName} · {r.membersCount} members
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            Owner: {s.ownerName} · {s.membersCount} members
-                          </div>
-                          <div className="mt-2 flex gap-2">
+                          <div className="flex gap-1">
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() =>
-                                handleRequestAccess(s.ownerId, "viewer")
+                                handleRequestAccess(r.ownerId, "viewer")
                               }
                             >
-                              Request View
+                              View
                             </Button>
                             <Button
                               size="sm"
                               onClick={() =>
-                                handleRequestAccess(s.ownerId, "editor")
+                                handleRequestAccess(r.ownerId, "editor")
                               }
                             >
-                              Request Edit
+                              Edit
                             </Button>
                           </div>
                         </div>
                       ))}
+                      {!joinLoading && joinQuery && joinResults.length === 0 && (
+                        <div className="text-xs text-muted-foreground text-center">
+                          No trees found matching your search
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground">
-                      No suggested trees available
+                  </div>
+                </div>
+
+                {/* Interesting Suggestions Button */}
+                <div className="mt-6 text-center">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSuggestions(!showSuggestions)}
+                    className="text-sm"
+                  >
+                    {showSuggestions ? "Hide" : "Show"} Interesting Family Trees
+                  </Button>
+                  {showSuggestions && (
+                    <div className="mt-4">
+                      {suggestedLoading ? (
+                        <div className="text-sm text-muted-foreground">
+                          Loading...
+                        </div>
+                      ) : suggested.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                          {suggested.map((s) => (
+                            <div
+                              key={`${s.ownerId}`}
+                              className="border rounded-md p-3 bg-white"
+                            >
+                              <div className="font-semibold">
+                                {s.headName || "Family Tree"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Owner: {s.ownerName} · {s.membersCount} members
+                              </div>
+                              <div className="mt-2 flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    handleRequestAccess(s.ownerId, "viewer")
+                                  }
+                                >
+                                  Request View
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    handleRequestAccess(s.ownerId, "editor")
+                                  }
+                                >
+                                  Request Edit
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No suggested trees available
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1385,9 +1387,6 @@ export default function FamilyTreePage() {
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
-                  <SelectContent>
-                  </SelectTrigger>
-                  <SelectContent>
                     <SelectItem value="male">Male</SelectItem>
                     <SelectItem value="female">Female</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
@@ -1395,281 +1394,3 @@ export default function FamilyTreePage() {
                 </Select>
               </div>
             </div>
-
-            <div>
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={newMember.location || ""}
-                onChange={(e) =>
-                  setNewMember((prev) => ({
-                    ...prev,
-                    location: e.target.value,
-                  }))
-                }
-                placeholder="Birth place, residence, etc."
-              />
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button onClick={handleSaveMember} className="flex-1">
-                Add Member
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowAddMemberDialog(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Relationship Dialog */}
-      <Dialog
-        open={showAddRelationshipDialog}
-        onOpenChange={setShowAddRelationshipDialog}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Relationship</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="fromMember">From Member</Label>
-              <Select
-                value={newRelationship.fromId || ""}
-                onValueChange={(value) =>
-                  setNewRelationship((prev) => ({ ...prev, fromId: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select first member" />
-                </SelectTrigger>
-                <SelectContent>
-                  {members.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {member.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="relationshipType">Relationship Type</Label>
-              <Select
-                value={newRelationship.type || ""}
-                onValueChange={(value) =>
-                  setNewRelationship((prev) => ({
-                    ...prev,
-                    type: value as any,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select relationship" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="parent">Parent</SelectItem>
-                  <SelectItem value="spouse">Spouse</SelectItem>
-                  <SelectItem value="adoptive">Adoptive</SelectItem>
-                  <SelectItem value="step">Step</SelectItem>
-                  <SelectItem value="big_sister">Big Sister</SelectItem>
-                  <SelectItem value="little_sister">Little Sister</SelectItem>
-                  <SelectItem value="big_brother">Big Brother</SelectItem>
-                  <SelectItem value="little_brother">Little Brother</SelectItem>
-                  <SelectItem value="aunt">Aunt</SelectItem>
-                  <SelectItem value="uncle">Uncle</SelectItem>
-                  <SelectItem value="cousin_big">Cousin (Older)</SelectItem>
-                  <SelectItem value="cousin_little">
-                    Cousin (Younger)
-                  </SelectItem>
-                  <SelectItem value="guardian">Guardian</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="toMember">To Member</Label>
-              <Select
-                value={newRelationship.toId || ""}
-                onValueChange={(value) =>
-                  setNewRelationship((prev) => ({ ...prev, toId: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select second member" />
-                </SelectTrigger>
-                <SelectContent>
-                  {members.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {member.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {suggestion && (
-              <div className="text-xs text-muted-foreground p-2 bg-blue-50 rounded">
-                {suggestion}
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-2">
-              <Button onClick={handleSaveRelationship} className="flex-1">
-                Add Relationship
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowAddRelationshipDialog(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Share Dialog */}
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Share Family Tree</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {shares.length > 0 && (
-              <div>
-                <Label className="text-sm font-medium">
-                  Currently shared with
-                </Label>
-                <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
-                  {shares.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-gray-50"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {shareNames[s.targetUserId] ||
-                            s.targetEmail ||
-                            s.targetUserId}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {s.role}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Select
-                          value={s.role}
-                          onValueChange={async (v) => {
-                            try {
-                              await fetch("/api/family-tree/share", {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  ownerId: user?.uid,
-                                  targetUserId: s.targetUserId,
-                                  role: v,
-                                }),
-                              });
-                              setShares((prev) =>
-                                prev.map((p) =>
-                                  p.id === s.id ? { ...p, role: v } : p
-                                )
-                              );
-                            } catch {}
-                          }}
-                        >
-                          <SelectTrigger className="h-7 w-24 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="viewer">Viewer</SelectItem>
-                            <SelectItem value="editor">Editor</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          onClick={async () => {
-                            try {
-                              await fetch(
-                                `/api/family-tree/share?ownerId=${user?.uid}&targetUserId=${s.targetUserId}`,
-                                { method: "DELETE" }
-                              );
-                              setShares((prev) =>
-                                prev.filter((p) => p.id !== s.id)
-                              );
-                            } catch {}
-                          }}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="border-t pt-4">
-              <Label className="text-sm font-medium">
-                Share with new person
-              </Label>
-              <div className="mt-2 space-y-3">
-                <div>
-                  <Label htmlFor="shareEmail" className="text-xs">
-                    Email
-                  </Label>
-                  <Input
-                    id="shareEmail"
-                    type="email"
-                    value={shareEmail}
-                    onChange={(e) => setShareEmail(e.target.value)}
-                    placeholder="friend@example.com"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="shareRole" className="text-xs">
-                    Permission
-                  </Label>
-                  <Select
-                    value={shareRole}
-                    onValueChange={(v) => setShareRole(v as any)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="viewer">Viewer (read-only)</SelectItem>
-                      <SelectItem value="editor">Editor (can edit)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button onClick={handleShare} className="flex-1">
-                Share
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShareDialogOpen(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
