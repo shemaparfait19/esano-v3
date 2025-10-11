@@ -61,6 +61,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     const req = snap.data() as any;
 
+    console.log("🔍 PATCH Access Request Debug:");
+    console.log("Request ID:", id);
+    console.log("Decision:", decision);
+    console.log("Owner ID:", req.ownerId);
+    console.log("Requester ID:", req.requesterId);
+    console.log("Access type:", req.access);
+
     await ref.set(
       { status: decision, updatedAt: new Date().toISOString() },
       { merge: true }
@@ -80,6 +87,10 @@ export async function PATCH(request: Request) {
       );
 
       // Create notification for requester that their request was accepted
+      console.log(
+        "📧 Creating acceptance notification for requester:",
+        req.requesterId
+      );
       await adminDb.collection("notifications").add({
         userId: req.requesterId,
         type: "tree_access_accepted",
@@ -95,6 +106,10 @@ export async function PATCH(request: Request) {
       });
     } else if (decision === "deny") {
       // Create notification for requester that their request was denied
+      console.log(
+        "📧 Creating denial notification for requester:",
+        req.requesterId
+      );
       await adminDb.collection("notifications").add({
         userId: req.requesterId,
         type: "tree_access_denied",
@@ -112,6 +127,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("❌ Error in PATCH access request:", e);
     return NextResponse.json(
       { error: "Failed to update request", detail: e?.message || "" },
       { status: 500 }

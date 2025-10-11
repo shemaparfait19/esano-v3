@@ -30,6 +30,8 @@ import { useAuth } from "@/contexts/auth-context";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Dashboard" },
@@ -37,6 +39,7 @@ const navItems = [
   { href: "/dashboard/relatives", icon: Users, label: "Relatives" },
   { href: "/dashboard/profile", icon: Users, label: "Profile" },
   { href: "/dashboard/family-tree", icon: Globe, label: "Family Tree" },
+  { href: "/dashboard/shared-trees", icon: Users, label: "Shared Trees" },
   { href: "/dashboard/ancestry", icon: Globe, label: "Ancestry" },
   { href: "/dashboard/insights", icon: BarChart, label: "Insights" },
   { href: "/dashboard/assistant", icon: Bot, label: "Assistant" },
@@ -52,6 +55,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [hasSharedTrees, setHasSharedTrees] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -67,6 +71,22 @@ export default function DashboardLayout({
       }
     }
   }, [loading, user, userProfile, pathname, router]);
+
+  // Listen for shared trees
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(
+      collection(db, "familyTreeShares"),
+      where("targetUserId", "==", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setHasSharedTrees(snapshot.size > 0);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   if (loading) {
     return (
@@ -116,7 +136,13 @@ export default function DashboardLayout({
               <SidebarMenuItem key={item.href}>
                 <Link
                   href={item.href}
-                  onClick={() => isMobile && setSidebarOpen(false)}
+                  onClick={() => {
+                    isMobile && setSidebarOpen(false);
+                    // Clear the dot when user visits shared trees
+                    if (item.href === "/dashboard/shared-trees") {
+                      setHasSharedTrees(false);
+                    }
+                  }}
                   className="block"
                 >
                   <SidebarMenuButton
@@ -124,7 +150,15 @@ export default function DashboardLayout({
                     tooltip={{ children: item.label }}
                     className="w-full transition-all duration-300 ease-in-out hover:scale-105"
                   >
-                    <item.icon className="h-4 w-4" />
+                    <div className="relative">
+                      <item.icon className="h-4 w-4" />
+                      {item.href === "/dashboard/shared-trees" &&
+                        hasSharedTrees && (
+                          <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-3 w-3 flex items-center justify-center">
+                            •
+                          </span>
+                        )}
+                    </div>
                     <span className="font-medium">{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
