@@ -27,6 +27,7 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { SuggestionCard } from "@/components/dashboard/suggestion-card";
 import { FamilyCodeGenerator } from "@/components/family-tree/family-code-generator";
+import { FamilyTreeSuggestions } from "@/components/dashboard/family-tree-suggestions";
 import { useRouter } from "next/navigation";
 
 type SuggestedMatch = {
@@ -93,9 +94,32 @@ export default function DashboardPage() {
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
-      router.push(
-        `/dashboard/search?q=${encodeURIComponent(searchQuery.trim())}`
+      // Check if the search query looks like a family tree search
+      const query = searchQuery.trim().toLowerCase();
+      const familyTreeKeywords = [
+        "family",
+        "tree",
+        "ancestor",
+        "relative",
+        "genealogy",
+      ];
+      const isFamilyTreeSearch = familyTreeKeywords.some((keyword) =>
+        query.includes(keyword)
       );
+
+      if (isFamilyTreeSearch) {
+        // Redirect to family tree suggestions with search
+        router.push(
+          `/dashboard/family-tree?search=${encodeURIComponent(
+            searchQuery.trim()
+          )}`
+        );
+      } else {
+        // Regular search for relatives
+        router.push(
+          `/dashboard/search?q=${encodeURIComponent(searchQuery.trim())}`
+        );
+      }
     }
   };
 
@@ -267,7 +291,7 @@ export default function DashboardPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Search for lost family members..."
+              placeholder="Search for relatives or family trees..."
               className="w-full outline-none bg-white text-gray-600 text-sm px-4 py-3"
               autoComplete="off"
               spellCheck={false}
@@ -475,6 +499,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Family Tree Discovery - For All Users */}
+      <FamilyTreeSuggestions />
 
       <div className="grid gap-6 md:grid-cols-2">
         {features.map((feature) => (
