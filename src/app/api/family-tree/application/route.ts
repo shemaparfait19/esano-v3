@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import type { FamilyTreeApplication } from "@/types/firestore";
-import { Buffer } from "buffer";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +82,9 @@ export async function POST(request: Request) {
       if (nationalIdFile) {
         const fileName = `nationalId_${Date.now()}_${nationalIdFile.name}`;
         const fileBuffer = await nationalIdFile.arrayBuffer();
-        const base64Content = Buffer.from(fileBuffer).toString("base64");
+        const base64Content = btoa(
+          String.fromCharCode(...new Uint8Array(fileBuffer))
+        );
 
         // Store file in Firestore
         const fileDoc = await adminDb.collection("uploadedDocuments").add({
@@ -110,7 +111,9 @@ export async function POST(request: Request) {
           proofOfFamilyFile.name
         }`;
         const fileBuffer = await proofOfFamilyFile.arrayBuffer();
-        const base64Content = Buffer.from(fileBuffer).toString("base64");
+        const base64Content = btoa(
+          String.fromCharCode(...new Uint8Array(fileBuffer))
+        );
 
         // Store file in Firestore
         const fileDoc = await adminDb.collection("uploadedDocuments").add({
@@ -137,7 +140,9 @@ export async function POST(request: Request) {
           guardianConsentFile.name
         }`;
         const fileBuffer = await guardianConsentFile.arrayBuffer();
-        const base64Content = Buffer.from(fileBuffer).toString("base64");
+        const base64Content = btoa(
+          String.fromCharCode(...new Uint8Array(fileBuffer))
+        );
 
         // Store file in Firestore
         const fileDoc = await adminDb.collection("uploadedDocuments").add({
@@ -263,11 +268,11 @@ export async function GET(request: Request) {
 
     console.log("Found applications:", applications.length);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       applications: applications || [],
       hasApplication: applications.length > 0,
       status: applications.length > 0 ? applications[0].status : null,
-      lastApplication: applications.length > 0 ? applications[0] : null
+      lastApplication: applications.length > 0 ? applications[0] : null,
     });
   } catch (error: any) {
     console.error("Get application error:", error);

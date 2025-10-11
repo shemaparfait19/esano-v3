@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { Buffer } from "buffer";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +37,12 @@ export async function GET(
     }
 
     // Convert base64 content back to buffer
-    const fileBuffer = Buffer.from(docData.content, "base64");
+    const binaryString = atob(docData.content);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const fileBuffer = bytes.buffer;
 
     // Determine content type
     let contentType = "application/octet-stream";

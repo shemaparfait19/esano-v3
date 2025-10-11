@@ -280,6 +280,8 @@ export function TreeCanvas({
   }>(null);
 
   const renderEdges = (ctx: CanvasRenderingContext2D, edges: any[]) => {
+    if (!edges || edges.length === 0) return;
+
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -339,6 +341,9 @@ export function TreeCanvas({
     members: FamilyMember[],
     options: RenderOptions
   ) => {
+    if (!nodes || nodes.length === 0 || !members || members.length === 0)
+      return;
+
     nodes.forEach((node) => {
       const member = members.find((m) => m.id === node.id);
       if (!member) return;
@@ -502,7 +507,9 @@ export function TreeCanvas({
     ctx.scale(canvasState.zoom, canvasState.zoom);
 
     // Use hierarchical layout for "View Result" mode, otherwise use current layout
-    const localLayout = showViewResult ? buildHierarchicalLayout() : (layout || { nodes: [], edges: [] });
+    const localLayout = showViewResult
+      ? buildHierarchicalLayout()
+      : layout || { nodes: [], edges: [] };
     renderEdges(ctx, localLayout.edges as any[]);
     renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
 
@@ -543,7 +550,9 @@ export function TreeCanvas({
 
   // ===== Get node at position
   const getNodeAtPosition = (worldX: number, worldY: number) => {
-    const localLayout = showViewResult ? buildHierarchicalLayout() : (layout || { nodes: [], edges: [] });
+    const localLayout = showViewResult
+      ? buildHierarchicalLayout()
+      : layout || { nodes: [], edges: [] };
     return localLayout.nodes.find(
       (node) =>
         worldX >= node.x &&
@@ -555,7 +564,9 @@ export function TreeCanvas({
 
   // Hit-test edges for hover tooltip
   const getEdgeAtPosition = (worldX: number, worldY: number) => {
-    const localLayout = showViewResult ? buildHierarchicalLayout() : (layout || { nodes: [], edges: [] });
+    const localLayout = showViewResult
+      ? buildHierarchicalLayout()
+      : layout || { nodes: [], edges: [] };
     const { edges: epaths } = localLayout;
     const radius = 6; // hover tolerance
     for (const e of epaths) {
