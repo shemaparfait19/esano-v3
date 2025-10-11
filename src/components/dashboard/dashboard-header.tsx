@@ -336,9 +336,13 @@ export function DashboardHeader() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() =>
-                      router.push(`/dashboard/profile?userId=${r.requesterId}`)
-                    }
+                    onClick={() => {
+                      console.log(
+                        "🔍 Navigating to profile for requester:",
+                        r.requesterId
+                      );
+                      router.push(`/dashboard/profile/${r.requesterId}`);
+                    }}
                   >
                     View Profile
                   </Button>
