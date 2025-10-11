@@ -1257,6 +1257,7 @@ export default function FamilyTreePage() {
         </div>
       )}
       </>
+      )}
 
       {/* Canvas Container */}
       <div
