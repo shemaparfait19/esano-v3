@@ -89,11 +89,36 @@ export interface FamilyTreeApplication {
   userEmail: string;
   userFullName: string;
   applicationData: {
+    // Personal Information
+    fullName: string;
+    nationalId: string;
+    phoneNumber: string;
+    address: string;
+
+    // Family Information
     reasonForTree: string;
     familyBackground: string;
     expectedMembers: number;
+
+    // Legal Information
+    isLegalGuardian: boolean;
+    guardianName?: string;
+    guardianRelationship?: string;
+    guardianContact?: string;
+
+    // Cultural and Additional Information
     culturalSignificance?: string;
     additionalInfo?: string;
+
+    // Legal Declarations
+    agreeToTerms: boolean;
+    confirmAccuracy: boolean;
+    consentToVerification: boolean;
+  };
+  documents?: {
+    nationalId?: string; // URL to uploaded document
+    proofOfFamily?: string; // URL to uploaded document
+    guardianConsent?: string; // URL to uploaded document
   };
   status: ApplicationStatus;
   adminNotes?: string;

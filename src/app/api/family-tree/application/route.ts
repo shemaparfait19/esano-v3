@@ -70,12 +70,38 @@ export async function POST(request: Request) {
       }
     }
 
+    // Handle file uploads and store document URLs
+    const documents: {
+      nationalId?: string;
+      proofOfFamily?: string;
+      guardianConsent?: string;
+    } = {};
+
+    // For now, we'll store the file names. In production, you'd upload to Firebase Storage
+    // and store the download URLs here
+    if (nationalIdFile) {
+      documents.nationalId = `documents/${userId}/nationalId_${Date.now()}_${
+        nationalIdFile.name
+      }`;
+    }
+    if (proofOfFamilyFile) {
+      documents.proofOfFamily = `documents/${userId}/proofOfFamily_${Date.now()}_${
+        proofOfFamilyFile.name
+      }`;
+    }
+    if (guardianConsentFile) {
+      documents.guardianConsent = `documents/${userId}/guardianConsent_${Date.now()}_${
+        guardianConsentFile.name
+      }`;
+    }
+
     // Create application
     const application: FamilyTreeApplication = {
       userId,
       userEmail,
       userFullName,
       applicationData,
+      documents: Object.keys(documents).length > 0 ? documents : undefined,
       status: "pending",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -202,140 +202,393 @@ export default function AdminApplicationsPage() {
         {/* Application Details */}
         <div className="lg:col-span-1">
           {selectedApplication ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Info className="h-5 w-5" />
-                  Application Details
-                </CardTitle>
-                <CardDescription>
-                  Review this application and make a decision
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">Applicant</Label>
-                  <div className="text-sm text-gray-600">
-                    {selectedApplication.userFullName}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {selectedApplication.userEmail}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium flex items-center gap-1">
-                    <Heart className="h-3 w-3" />
-                    Reason for Tree
-                  </Label>
-                  <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                    {selectedApplication.applicationData.reasonForTree}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium flex items-center gap-1">
-                    <Users className="h-3 w-3" />
-                    Family Background
-                  </Label>
-                  <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                    {selectedApplication.applicationData.familyBackground}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium">
-                    Expected Members
-                  </Label>
-                  <div className="text-sm text-gray-600">
-                    {selectedApplication.applicationData.expectedMembers}
-                  </div>
-                </div>
-
-                {selectedApplication.applicationData.culturalSignificance && (
+            <div className="space-y-4">
+              {/* Personal Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <User className="h-5 w-5" />
+                    Personal Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
                   <div>
-                    <Label className="text-sm font-medium">
-                      Cultural Significance
-                    </Label>
-                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                      {selectedApplication.applicationData.culturalSignificance}
+                    <Label className="text-sm font-medium">Full Name</Label>
+                    <div className="text-sm text-gray-600">
+                      {selectedApplication.applicationData.fullName ||
+                        selectedApplication.userFullName}
                     </div>
                   </div>
-                )}
 
-                {selectedApplication.applicationData.additionalInfo && (
                   <div>
-                    <Label className="text-sm font-medium">
-                      Additional Information
-                    </Label>
-                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                      {selectedApplication.applicationData.additionalInfo}
+                    <Label className="text-sm font-medium">Email</Label>
+                    <div className="text-sm text-gray-600">
+                      {selectedApplication.userEmail}
                     </div>
                   </div>
-                )}
 
-                {selectedApplication.status === "pending" && (
-                  <>
+                  {selectedApplication.applicationData.nationalId && (
                     <div>
-                      <Label htmlFor="reviewNotes">Review Notes</Label>
-                      <Textarea
-                        id="reviewNotes"
-                        placeholder="Add notes about your decision (required for denials)"
-                        value={reviewNotes}
-                        onChange={(e) => setReviewNotes(e.target.value)}
-                        className="mt-1"
-                      />
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() =>
-                          handleReview(selectedApplication.id!, "approved")
-                        }
-                        disabled={processing}
-                        className="flex-1 bg-green-600 hover:bg-green-700"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Approve
-                      </Button>
-                      <Button
-                        onClick={() =>
-                          handleReview(selectedApplication.id!, "denied")
-                        }
-                        disabled={processing || !reviewNotes.trim()}
-                        variant="destructive"
-                        className="flex-1"
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Deny
-                      </Button>
-                    </div>
-                  </>
-                )}
-
-                {selectedApplication.status !== "pending" && (
-                  <div className="bg-gray-50 p-3 rounded">
-                    <div className="text-sm font-medium mb-1">
-                      Status: {selectedApplication.status}
-                    </div>
-                    {selectedApplication.adminNotes && (
+                      <Label className="text-sm font-medium">National ID</Label>
                       <div className="text-sm text-gray-600">
-                        <strong>Admin Notes:</strong>{" "}
-                        {selectedApplication.adminNotes}
+                        {selectedApplication.applicationData.nationalId}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedApplication.applicationData.phoneNumber && (
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Phone Number
+                      </Label>
+                      <div className="text-sm text-gray-600">
+                        {selectedApplication.applicationData.phoneNumber}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedApplication.applicationData.address && (
+                    <div>
+                      <Label className="text-sm font-medium">Address</Label>
+                      <div className="text-sm text-gray-600">
+                        {selectedApplication.applicationData.address}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Legal Guardian Information */}
+              {selectedApplication.applicationData.isLegalGuardian !==
+                undefined && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <CheckCircle className="h-5 w-5" />
+                      Legal Guardian Status
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Legal Authority
+                      </Label>
+                      <div className="text-sm text-gray-600">
+                        {selectedApplication.applicationData.isLegalGuardian
+                          ? "Yes - Has legal authority"
+                          : "No - Does not have legal authority"}
+                      </div>
+                    </div>
+
+                    {selectedApplication.applicationData.guardianName && (
+                      <div>
+                        <Label className="text-sm font-medium">
+                          Guardian Name
+                        </Label>
+                        <div className="text-sm text-gray-600">
+                          {selectedApplication.applicationData.guardianName}
+                        </div>
                       </div>
                     )}
-                    {selectedApplication.reviewedAt && (
-                      <div className="text-xs text-gray-500 mt-2">
-                        Reviewed:{" "}
-                        {new Date(
-                          selectedApplication.reviewedAt
-                        ).toLocaleDateString()}
+
+                    {selectedApplication.applicationData
+                      .guardianRelationship && (
+                      <div>
+                        <Label className="text-sm font-medium">
+                          Relationship
+                        </Label>
+                        <div className="text-sm text-gray-600">
+                          {
+                            selectedApplication.applicationData
+                              .guardianRelationship
+                          }
+                        </div>
                       </div>
                     )}
+
+                    {selectedApplication.applicationData.guardianContact && (
+                      <div>
+                        <Label className="text-sm font-medium">
+                          Guardian Contact
+                        </Label>
+                        <div className="text-sm text-gray-600">
+                          {selectedApplication.applicationData.guardianContact}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Documents */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <FileText className="h-5 w-5" />
+                    Submitted Documents
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {selectedApplication.documents?.nationalId && (
+                    <div>
+                      <Label className="text-sm font-medium">National ID</Label>
+                      <div className="mt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            window.open(
+                              selectedApplication.documents?.nationalId,
+                              "_blank"
+                            )
+                          }
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          View Document
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedApplication.documents?.proofOfFamily && (
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Proof of Family Relationship
+                      </Label>
+                      <div className="mt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            window.open(
+                              selectedApplication.documents?.proofOfFamily,
+                              "_blank"
+                            )
+                          }
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          View Document
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedApplication.documents?.guardianConsent && (
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Guardian Consent
+                      </Label>
+                      <div className="mt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            window.open(
+                              selectedApplication.documents?.guardianConsent,
+                              "_blank"
+                            )
+                          }
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          View Document
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!selectedApplication.documents && (
+                    <div className="text-sm text-gray-500 italic">
+                      No documents uploaded
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Family Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Users className="h-5 w-5" />
+                    Family Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium flex items-center gap-1">
+                      <Heart className="h-3 w-3" />
+                      Reason for Tree
+                    </Label>
+                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded mt-1">
+                      {selectedApplication.applicationData.reasonForTree}
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+
+                  <div>
+                    <Label className="text-sm font-medium">
+                      Family Background
+                    </Label>
+                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded mt-1">
+                      {selectedApplication.applicationData.familyBackground}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium">
+                      Expected Members
+                    </Label>
+                    <div className="text-sm text-gray-600">
+                      {selectedApplication.applicationData.expectedMembers}
+                    </div>
+                  </div>
+
+                  {selectedApplication.applicationData.culturalSignificance && (
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Cultural Significance
+                      </Label>
+                      <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded mt-1">
+                        {
+                          selectedApplication.applicationData
+                            .culturalSignificance
+                        }
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedApplication.applicationData.additionalInfo && (
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Additional Information
+                      </Label>
+                      <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded mt-1">
+                        {selectedApplication.applicationData.additionalInfo}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Legal Declarations */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <CheckCircle className="h-5 w-5" />
+                    Legal Declarations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle
+                      className={`h-4 w-4 ${
+                        selectedApplication.applicationData.agreeToTerms
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    />
+                    <span className="text-sm">
+                      Agrees to Terms of Service and Privacy Policy
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <CheckCircle
+                      className={`h-4 w-4 ${
+                        selectedApplication.applicationData.confirmAccuracy
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    />
+                    <span className="text-sm">
+                      Confirms information accuracy
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <CheckCircle
+                      className={`h-4 w-4 ${
+                        selectedApplication.applicationData
+                          .consentToVerification
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    />
+                    <span className="text-sm">Consents to verification</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Review Actions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Info className="h-5 w-5" />
+                    Review Decision
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {selectedApplication.status === "pending" && (
+                    <>
+                      <div>
+                        <Label htmlFor="reviewNotes">Review Notes</Label>
+                        <Textarea
+                          id="reviewNotes"
+                          placeholder="Add notes about your decision (required for denials)"
+                          value={reviewNotes}
+                          onChange={(e) => setReviewNotes(e.target.value)}
+                          className="mt-1"
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() =>
+                            handleReview(selectedApplication.id!, "approved")
+                          }
+                          disabled={processing}
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Approve
+                        </Button>
+                        <Button
+                          onClick={() =>
+                            handleReview(selectedApplication.id!, "denied")
+                          }
+                          disabled={processing || !reviewNotes.trim()}
+                          variant="destructive"
+                          className="flex-1"
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Deny
+                        </Button>
+                      </div>
+                    </>
+                  )}
+
+                  {selectedApplication.status !== "pending" && (
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="text-sm font-medium mb-1">
+                        Status: {selectedApplication.status}
+                      </div>
+                      {selectedApplication.adminNotes && (
+                        <div className="text-sm text-gray-600">
+                          <strong>Admin Notes:</strong>{" "}
+                          {selectedApplication.adminNotes}
+                        </div>
+                      )}
+                      {selectedApplication.reviewedAt && (
+                        <div className="text-xs text-gray-500 mt-2">
+                          Reviewed:{" "}
+                          {new Date(
+                            selectedApplication.reviewedAt
+                          ).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           ) : (
             <Card>
               <CardContent className="flex items-center justify-center h-64">
