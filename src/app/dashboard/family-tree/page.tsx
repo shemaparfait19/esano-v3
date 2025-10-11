@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -648,7 +647,7 @@ export default function FamilyTreePage() {
         });
         return;
       }
-      const dataUrl = canvas.toDataURL("image/png");
+      const dataUrl = canvas.toDataDataURL("image/png");
       const a = document.createElement("a");
       a.href = dataUrl;
       a.download = `family-tree-${new Date().toISOString()}.png`;
@@ -1385,6 +1384,7 @@ export default function FamilyTreePage() {
                   <SelectTrigger>
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
+                  <SelectContent>
                   <SelectContent>
                   </SelectTrigger>
                   <SelectContent>
