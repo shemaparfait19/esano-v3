@@ -152,6 +152,7 @@ export function DashboardHeader() {
   // Load family tree access requests
   useEffect(() => {
     if (!user?.uid) return;
+    console.log("🔍 Loading family tree access requests for user:", user.uid);
     const ref = collection(db, "familyTreeAccessRequests");
     const q = query(
       ref,
@@ -161,14 +162,21 @@ export function DashboardHeader() {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const items = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as any),
-        }));
+        console.log("📋 Access requests snapshot:", snap.size, "docs found");
+        const items = snap.docs.map((d) => {
+          const data = d.data() as any;
+          console.log("📄 Request data:", { id: d.id, ...data });
+          return {
+            id: d.id,
+            ...data,
+          };
+        });
+        console.log("✅ Processed access requests:", items);
         setAccessRequests(items);
         setAccessRequestCount(items.length);
       },
-      () => {
+      (error) => {
+        console.error("❌ Error loading access requests:", error);
         setAccessRequests([]);
         setAccessRequestCount(0);
       }
@@ -277,11 +285,24 @@ export function DashboardHeader() {
                   <Button
                     size="sm"
                     onClick={async () => {
-                      await fetch("/api/family-tree/access-request", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ id: r.id, decision: "accept" }),
-                      });
+                      try {
+                        const res = await fetch(
+                          "/api/family-tree/access-request",
+                          {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              id: r.id,
+                              decision: "accept",
+                            }),
+                          }
+                        );
+                        if (res.ok) {
+                          // Request will be removed from the list automatically via the real-time listener
+                        }
+                      } catch (error) {
+                        console.error("Failed to accept request:", error);
+                      }
                     }}
                   >
                     Accept
@@ -290,11 +311,24 @@ export function DashboardHeader() {
                     size="sm"
                     variant="outline"
                     onClick={async () => {
-                      await fetch("/api/family-tree/access-request", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ id: r.id, decision: "deny" }),
-                      });
+                      try {
+                        const res = await fetch(
+                          "/api/family-tree/access-request",
+                          {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              id: r.id,
+                              decision: "deny",
+                            }),
+                          }
+                        );
+                        if (res.ok) {
+                          // Request will be removed from the list automatically via the real-time listener
+                        }
+                      } catch (error) {
+                        console.error("Failed to decline request:", error);
+                      }
                     }}
                   >
                     Decline

@@ -1,87 +1,119 @@
-import { NextApiRequest, NextApiResponse } from "next";
-import { getApps, initializeApp, cert } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { NextRequest, NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase-admin";
 
-// Initialize Firebase Admin SDK (only once)
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  });
+export const dynamic = "force-dynamic";
+
+// POST /api/family-tree/access-request
+// body: { ownerId: string, requesterId: string, access: "viewer"|"editor", message?: string }
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { ownerId, requesterId, access, message } = body as any;
+    if (!ownerId || !requesterId || !access) {
+      return NextResponse.json(
+        { error: "ownerId, requesterId and access are required" },
+        { status: 400 }
+      );
+    }
+    const doc = {
+      ownerId,
+      requesterId,
+      access,
+      message: message || "",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const ref = await adminDb.collection("familyTreeAccessRequests").add(doc);
+    // notify owner
+    await adminDb.collection("notifications").add({
+      userId: ownerId,
+      type: "tree_access_request",
+      title: "New tree access request",
+      message: `A user requested ${access} access to your family tree`,
+      payload: { requestId: ref.id, requesterId, access },
+      status: "unread",
+      createdAt: new Date().toISOString(),
+    });
+    return NextResponse.json({ ok: true, id: ref.id });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Failed to request access", detail: e?.message || "" },
+      { status: 500 }
+    );
+  }
 }
 
-const db = getFirestore();
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+// PATCH /api/family-tree/access-request  body: { id, decision: "accept"|"deny" }
+export async function PATCH(request: NextRequest) {
   try {
-    // ✅ Verify HTTP method
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
+    const body = await request.json();
+    const { id, decision } = body as any;
+    if (!id || !decision) {
+      return NextResponse.json(
+        { error: "id and decision are required" },
+        { status: 400 }
+      );
+    }
+    const ref = adminDb.collection("familyTreeAccessRequests").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists)
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const req = snap.data() as any;
+
+    await ref.set(
+      { status: decision, updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
+
+    if (decision === "accept") {
+      // create share
+      const docId = `${req.ownerId}_${req.requesterId}`;
+      await adminDb.collection("familyTreeShares").doc(docId).set(
+        {
+          ownerId: req.ownerId,
+          targetUserId: req.requesterId,
+          role: req.access,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
     }
 
-    // ✅ Check auth header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(401)
-        .json({ error: "Missing or invalid authorization header" });
-    }
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Failed to update request", detail: e?.message || "" },
+      { status: 500 }
+    );
+  }
+}
 
-    const idToken = authHeader.split("Bearer ")[1];
-    const decoded = await getAuth().verifyIdToken(idToken);
-    const fromUserId = decoded.uid;
-
-    // ✅ Validate body
-    const { toUserId } = req.body;
-    if (!toUserId) {
-      return res
-        .status(400)
-        .json({ error: "Missing 'toUserId' in request body" });
+// GET /api/family-tree/access-request?ownerId=...
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const ownerId = searchParams.get("ownerId");
+    if (!ownerId) {
+      return NextResponse.json(
+        { error: "ownerId is required" },
+        { status: 400 }
+      );
     }
-    if (toUserId === fromUserId) {
-      return res
-        .status(400)
-        .json({ error: "You cannot send a request to yourself" });
-    }
-
-    // ✅ Check if a pending request already exists
-    const existingQuery = db
-      .collection("connectionRequests")
-      .where("fromUserId", "==", fromUserId)
-      .where("toUserId", "==", toUserId)
+    const q = adminDb
+      .collection("familyTreeAccessRequests")
+      .where("ownerId", "==", ownerId)
       .where("status", "==", "pending");
-
-    const existingSnap = await existingQuery.get();
-    if (!existingSnap.empty) {
-      return res
-        .status(400)
-        .json({ error: "A pending request already exists" });
-    }
-
-    // ✅ Create new connection request
-    await db.collection("connectionRequests").add({
-      fromUserId,
-      toUserId,
-      status: "pending",
-      createdAt: Timestamp.now(),
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Access request sent successfully",
-    });
-  } catch (err: any) {
-    console.error("Error sending access request:", err);
-    return res.status(500).json({
-      error: "Failed to send access request",
-      details: err.message,
-    });
+    const snap = await q.get();
+    const items = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as any),
+    }));
+    return NextResponse.json({ items });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Failed to load requests", detail: e?.message || "" },
+      { status: 500 }
+    );
   }
 }
