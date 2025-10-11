@@ -7,19 +7,35 @@ export const dynamic = "force-dynamic";
 // POST /api/family-tree/application - Submit family tree application
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { userId, userEmail, userFullName, applicationData } = body as {
-      userId: string;
-      userEmail: string;
-      userFullName: string;
-      applicationData: {
-        reasonForTree: string;
-        familyBackground: string;
-        expectedMembers: number;
-        culturalSignificance?: string;
-        additionalInfo?: string;
-      };
+    const formData = await request.formData();
+    const userId = formData.get("userId") as string;
+    const userEmail = formData.get("userEmail") as string;
+    const userFullName = formData.get("userFullName") as string;
+    const applicationDataStr = formData.get("applicationData") as string;
+
+    const applicationData = JSON.parse(applicationDataStr) as {
+      fullName: string;
+      nationalId: string;
+      phoneNumber: string;
+      address: string;
+      reasonForTree: string;
+      familyBackground: string;
+      expectedMembers: number;
+      isLegalGuardian: boolean;
+      guardianName?: string;
+      guardianRelationship?: string;
+      guardianContact?: string;
+      culturalSignificance?: string;
+      additionalInfo?: string;
+      agreeToTerms: boolean;
+      confirmAccuracy: boolean;
+      consentToVerification: boolean;
     };
+
+    // Get uploaded files
+    const nationalIdFile = formData.get("nationalId") as File | null;
+    const proofOfFamilyFile = formData.get("proofOfFamily") as File | null;
+    const guardianConsentFile = formData.get("guardianConsent") as File | null;
 
     if (!userId || !userEmail || !userFullName || !applicationData) {
       return NextResponse.json(
