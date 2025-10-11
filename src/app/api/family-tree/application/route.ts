@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import type { FamilyTreeApplication } from "@/types/firestore";
+import { writeFile, mkdir } from "fs/promises";
+import { join } from "path";
 
 export const dynamic = "force-dynamic";
 
@@ -77,22 +79,35 @@ export async function POST(request: Request) {
       guardianConsent?: string;
     } = {};
 
-    // For now, we'll store the file names. In production, you'd upload to Firebase Storage
-    // and store the download URLs here
+    // Create user-specific upload directory
+    const uploadDir = join(process.cwd(), "uploads", "documents", userId);
+    await mkdir(uploadDir, { recursive: true });
+
+    // Save uploaded files
     if (nationalIdFile) {
-      documents.nationalId = `documents/${userId}/nationalId_${Date.now()}_${
-        nationalIdFile.name
-      }`;
+      const fileName = `nationalId_${Date.now()}_${nationalIdFile.name}`;
+      const filePath = join(uploadDir, fileName);
+      const fileBuffer = await nationalIdFile.arrayBuffer();
+      await writeFile(filePath, Buffer.from(fileBuffer));
+      documents.nationalId = `/api/admin/documents/${userId}/${fileName}`;
     }
+
     if (proofOfFamilyFile) {
-      documents.proofOfFamily = `documents/${userId}/proofOfFamily_${Date.now()}_${
-        proofOfFamilyFile.name
-      }`;
+      const fileName = `proofOfFamily_${Date.now()}_${proofOfFamilyFile.name}`;
+      const filePath = join(uploadDir, fileName);
+      const fileBuffer = await proofOfFamilyFile.arrayBuffer();
+      await writeFile(filePath, Buffer.from(fileBuffer));
+      documents.proofOfFamily = `/api/admin/documents/${userId}/${fileName}`;
     }
+
     if (guardianConsentFile) {
-      documents.guardianConsent = `documents/${userId}/guardianConsent_${Date.now()}_${
+      const fileName = `guardianConsent_${Date.now()}_${
         guardianConsentFile.name
       }`;
+      const filePath = join(uploadDir, fileName);
+      const fileBuffer = await guardianConsentFile.arrayBuffer();
+      await writeFile(filePath, Buffer.from(fileBuffer));
+      documents.guardianConsent = `/api/admin/documents/${userId}/${fileName}`;
     }
 
     // Create application
