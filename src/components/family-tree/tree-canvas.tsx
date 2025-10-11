@@ -509,7 +509,10 @@ export function TreeCanvas({
     // Use hierarchical layout for "View Result" mode, otherwise use current layout
     const localLayout = showViewResult
       ? buildHierarchicalLayout()
-      : layout || { nodes: [], edges: [] };
+      : layout ||
+        (members.length > 0
+          ? buildHierarchicalLayout()
+          : { nodes: [], edges: [] });
     renderEdges(ctx, localLayout.edges as any[]);
     renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
 
@@ -552,7 +555,10 @@ export function TreeCanvas({
   const getNodeAtPosition = (worldX: number, worldY: number) => {
     const localLayout = showViewResult
       ? buildHierarchicalLayout()
-      : layout || { nodes: [], edges: [] };
+      : layout ||
+        (members.length > 0
+          ? buildHierarchicalLayout()
+          : { nodes: [], edges: [] });
     return localLayout.nodes.find(
       (node) =>
         worldX >= node.x &&
@@ -566,7 +572,10 @@ export function TreeCanvas({
   const getEdgeAtPosition = (worldX: number, worldY: number) => {
     const localLayout = showViewResult
       ? buildHierarchicalLayout()
-      : layout || { nodes: [], edges: [] };
+      : layout ||
+        (members.length > 0
+          ? buildHierarchicalLayout()
+          : { nodes: [], edges: [] });
     const { edges: epaths } = localLayout;
     const radius = 6; // hover tolerance
     for (const e of epaths) {

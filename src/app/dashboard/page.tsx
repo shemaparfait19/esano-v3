@@ -26,6 +26,7 @@ import { useEffect, useState, useCallback } from "react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { SuggestionCard } from "@/components/dashboard/suggestion-card";
+import { FamilyCodeGenerator } from "@/components/family-tree/family-code-generator";
 import { useRouter } from "next/navigation";
 
 type SuggestedMatch = {
@@ -245,6 +246,18 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {/* Family Code Generator for Family Heads */}
+      {userProfile?.isFamilyHead && (
+        <div className="max-w-md">
+          <FamilyCodeGenerator
+            userProfile={userProfile}
+            onCodeGenerated={(code) => {
+              console.log("Family code generated:", code);
+            }}
+          />
+        </div>
+      )}
+
       {/* Search Bar */}
       <div className="flex justify-center mb-8">
         <div className="relative w-full max-w-md mx-auto">
@@ -426,6 +439,39 @@ export default function DashboardPage() {
                 </CardHeader>
               </Card>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Suggested Family Trees */}
+      {userProfile?.familyTreeApproved && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="font-headline text-2xl font-bold text-primary">
+              Suggested Family Trees
+            </h2>
+            <p className="text-muted-foreground">
+              Discover interesting family trees you might want to explore.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-headline text-lg text-primary">
+                  Explore Family Trees
+                </CardTitle>
+                <CardDescription>
+                  Discover and connect with other family trees
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/family-tree">
+                    View Family Trees <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}

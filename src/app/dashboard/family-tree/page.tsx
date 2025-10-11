@@ -45,7 +45,6 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { FamilyTreeApplicationForm } from "@/components/family-tree/application-form";
-import { FamilyCodeGenerator } from "@/components/family-tree/family-code-generator";
 
 export default function FamilyTreePage() {
   const { user, userProfile } = useAuth();
@@ -1229,18 +1228,6 @@ export default function FamilyTreePage() {
             </div>
           )}
         </div>
-
-        {/* Family Code Generator for Family Heads */}
-        {userProfile?.isFamilyHead && (
-          <div className="absolute top-2 left-2 z-10">
-            <FamilyCodeGenerator
-              userProfile={userProfile}
-              onCodeGenerated={(code) => {
-                console.log("Family code generated:", code);
-              }}
-            />
-          </div>
-        )}
 
         {tree && tree.members && tree.members.length > 0 ? (
           <TreeCanvas
