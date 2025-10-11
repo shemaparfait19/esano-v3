@@ -263,7 +263,12 @@ export async function GET(request: Request) {
 
     console.log("Found applications:", applications.length);
 
-    return NextResponse.json({ applications });
+    return NextResponse.json({ 
+      applications: applications || [],
+      hasApplication: applications.length > 0,
+      status: applications.length > 0 ? applications[0].status : null,
+      lastApplication: applications.length > 0 ? applications[0] : null
+    });
   } catch (error: any) {
     console.error("Get application error:", error);
     return NextResponse.json(
