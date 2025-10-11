@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -145,11 +146,11 @@ export default function FamilyTreePage() {
       try {
         const res = await fetch(`/api/family-tree/application?userId=${user.uid}`);
         const data = await res.json();
-        
+
         if (res.ok && data.applications) {
           const applications = data.applications;
           const lastApplication = applications[0]; // Most recent
-          
+
           setApplicationStatus({
             hasApplication: applications.length > 0,
             status: lastApplication?.status || null,
@@ -1252,9 +1253,6 @@ export default function FamilyTreePage() {
           </div>
         </div>
       )}
-      </>
-      </>
-      )}
 
       {/* Canvas Container */}
       <div
@@ -1386,6 +1384,8 @@ export default function FamilyTreePage() {
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="male">Male</SelectItem>
