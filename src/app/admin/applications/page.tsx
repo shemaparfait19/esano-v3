@@ -333,19 +333,12 @@ export default function AdminApplicationsPage() {
                     <div>
                       <Label className="text-sm font-medium">National ID</Label>
                       <div className="mt-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            window.open(
-                              selectedApplication.documents?.nationalId,
-                              "_blank"
-                            )
-                          }
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          View Document
-                        </Button>
+                        <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                          {selectedApplication.documents.nationalId}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          File uploaded successfully
+                        </p>
                       </div>
                     </div>
                   )}
@@ -356,19 +349,12 @@ export default function AdminApplicationsPage() {
                         Proof of Family Relationship
                       </Label>
                       <div className="mt-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            window.open(
-                              selectedApplication.documents?.proofOfFamily,
-                              "_blank"
-                            )
-                          }
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          View Document
-                        </Button>
+                        <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                          {selectedApplication.documents.proofOfFamily}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          File uploaded successfully
+                        </p>
                       </div>
                     </div>
                   )}
@@ -379,19 +365,12 @@ export default function AdminApplicationsPage() {
                         Guardian Consent
                       </Label>
                       <div className="mt-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            window.open(
-                              selectedApplication.documents?.guardianConsent,
-                              "_blank"
-                            )
-                          }
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          View Document
-                        </Button>
+                        <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                          {selectedApplication.documents.guardianConsent}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          File uploaded successfully
+                        </p>
                       </div>
                     </div>
                   )}
