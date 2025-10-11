@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/auth-context";
-import { Bell, LogOut, Mail, User } from "lucide-react";
+import { Bell, LogOut, Mail, User, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -54,6 +54,8 @@ export function DashboardHeader() {
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [recentMsgs, setRecentMsgs] = useState<any[]>([]);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [accessRequests, setAccessRequests] = useState<any[]>([]);
+  const [accessRequestCount, setAccessRequestCount] = useState(0);
 
   const handleSignOut = async () => {
     await signOut();
@@ -147,6 +149,33 @@ export function DashboardHeader() {
     };
   }, [user?.uid]);
 
+  // Load family tree access requests
+  useEffect(() => {
+    if (!user?.uid) return;
+    const ref = collection(db, "familyTreeAccessRequests");
+    const q = query(
+      ref,
+      where("treeOwnerId", "==", user.uid),
+      where("status", "==", "pending")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const items = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        }));
+        setAccessRequests(items);
+        setAccessRequestCount(items.length);
+      },
+      () => {
+        setAccessRequests([]);
+        setAccessRequestCount(0);
+      }
+    );
+    return () => unsub();
+  }, [user?.uid]);
+
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
       <SidebarTrigger className="md:hidden" />
@@ -209,6 +238,86 @@ export function DashboardHeader() {
               onClick={() => router.push("/dashboard/messages")}
             >
               Go to Messages
+            </Button>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+              <Users />
+              {accessRequestCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {accessRequestCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuLabel>Family Tree Access Requests</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {accessRequests.length === 0 && (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                No access requests
+              </div>
+            )}
+            {accessRequests.map((r) => (
+              <div key={r.id} className="px-3 py-2">
+                <div className="text-sm">
+                  <span className="font-medium">From:</span>{" "}
+                  <RequesterName userId={r.requesterId} />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Role: {r.requestedRole} •{" "}
+                  {new Date(
+                    r.createdAt?.toDate?.() || r.createdAt
+                  ).toLocaleDateString()}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      await fetch("/api/family-tree/access-request", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ id: r.id, status: "accepted" }),
+                      });
+                    }}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      await fetch("/api/family-tree/access-request", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ id: r.id, status: "denied" }),
+                      });
+                    }}
+                  >
+                    Decline
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      router.push(`/dashboard/profile?userId=${r.requesterId}`)
+                    }
+                  >
+                    View Profile
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <DropdownMenuSeparator />
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => router.push("/dashboard/family-tree")}
+            >
+              Go to Family Tree
             </Button>
           </DropdownMenuContent>
         </DropdownMenu>

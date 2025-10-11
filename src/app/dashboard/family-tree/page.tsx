@@ -948,26 +948,6 @@ export default function FamilyTreePage() {
       {/* Ask AI & Suggested Trees */}
       <div className="flex-none border-b bg-white/60">
         <div className="px-4 py-3 flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Ask AI about your family tree (e.g., Who is the head?)"
-              value={askText}
-              onChange={(e) => setAskText(e.target.value)}
-            />
-            <Button
-              size="sm"
-              onClick={handleAskAI}
-              className="whitespace-nowrap"
-            >
-              Ask AI
-            </Button>
-          </div>
-          {askAnswer && (
-            <div className="text-sm text-muted-foreground px-1">
-              {askAnswer}
-            </div>
-          )}
-
           {/* Collapsible suggested trees section */}
           {!ownerIdParam && tree && (tree?.members?.length || 0) > 0 && (
             <div className="mt-1">
@@ -1032,60 +1012,6 @@ export default function FamilyTreePage() {
                   )}
                 </>
               )}
-            </div>
-          )}
-
-          {/* Access Requests Inbox for Tree Owner */}
-          {!ownerIdParam && accessRequests.length > 0 && (
-            <div className="mt-3">
-              <div className="text-sm font-medium mb-2">
-                Access Requests (
-                {accessRequests.filter((r) => r.status === "pending").length})
-              </div>
-              <div className="space-y-2">
-                {accessRequests
-                  .filter((r) => r.status === "pending")
-                  .map((req) => (
-                    <div
-                      key={req.id}
-                      className="border rounded-md p-3 bg-white"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium text-sm">
-                            Request for {req.access} access
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            From: {req.requesterId} •{" "}
-                            {new Date(req.createdAt).toLocaleDateString()}
-                          </div>
-                          {req.message && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {req.message}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleApproveRequest(req.id, "deny")}
-                          >
-                            Deny
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              handleApproveRequest(req.id, "accept")
-                            }
-                          >
-                            Accept
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
             </div>
           )}
         </div>
@@ -1181,6 +1107,65 @@ export default function FamilyTreePage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Interesting Suggestions Button */}
+            <div className="mt-6 text-center">
+              <Button
+                variant="outline"
+                onClick={() => setShowSuggestions(!showSuggestions)}
+                className="text-sm"
+              >
+                {showSuggestions ? "Hide" : "Show"} Interesting Family Trees
+              </Button>
+              {showSuggestions && (
+                <div className="mt-4">
+                  {suggestedLoading ? (
+                    <div className="text-sm text-muted-foreground">
+                      Loading...
+                    </div>
+                  ) : suggested.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                      {suggested.map((s) => (
+                        <div
+                          key={`${s.ownerId}`}
+                          className="border rounded-md p-3 bg-white"
+                        >
+                          <div className="font-semibold">
+                            {s.headName || "Family Tree"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Owner: {s.ownerName} · {s.membersCount} members
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                handleRequestAccess(s.ownerId, "viewer")
+                              }
+                            >
+                              Request View
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                handleRequestAccess(s.ownerId, "editor")
+                              }
+                            >
+                              Request Edit
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      No suggested trees available
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
