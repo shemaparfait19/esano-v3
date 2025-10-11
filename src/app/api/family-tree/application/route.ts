@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import type { FamilyTreeApplication } from "@/types/firestore";
+import { Buffer } from "buffer";
 
 export const dynamic = "force-dynamic";
 
@@ -77,30 +78,85 @@ export async function POST(request: Request) {
       guardianConsent?: string;
     } = {};
 
-    // Handle file uploads (simplified for serverless environment)
+    // Handle file uploads - store in Firestore as base64
     try {
-      // For now, just store file metadata instead of actual files
-      // In production, you would upload to cloud storage (AWS S3, Google Cloud Storage, etc.)
       if (nationalIdFile) {
         const fileName = `nationalId_${Date.now()}_${nationalIdFile.name}`;
-        documents.nationalId = `uploaded:${fileName}`;
-        console.log("National ID file uploaded:", fileName);
+        const fileBuffer = await nationalIdFile.arrayBuffer();
+        const base64Content = Buffer.from(fileBuffer).toString("base64");
+
+        // Store file in Firestore
+        const fileDoc = await adminDb.collection("uploadedDocuments").add({
+          userId,
+          fileName,
+          fileType: nationalIdFile.type,
+          fileSize: nationalIdFile.size,
+          content: base64Content,
+          uploadedAt: new Date().toISOString(),
+          applicationId: null, // Will be updated after application is created
+        });
+
+        documents.nationalId = fileDoc.id;
+        console.log(
+          "National ID file uploaded:",
+          fileName,
+          "Doc ID:",
+          fileDoc.id
+        );
       }
 
       if (proofOfFamilyFile) {
         const fileName = `proofOfFamily_${Date.now()}_${
           proofOfFamilyFile.name
         }`;
-        documents.proofOfFamily = `uploaded:${fileName}`;
-        console.log("Proof of family file uploaded:", fileName);
+        const fileBuffer = await proofOfFamilyFile.arrayBuffer();
+        const base64Content = Buffer.from(fileBuffer).toString("base64");
+
+        // Store file in Firestore
+        const fileDoc = await adminDb.collection("uploadedDocuments").add({
+          userId,
+          fileName,
+          fileType: proofOfFamilyFile.type,
+          fileSize: proofOfFamilyFile.size,
+          content: base64Content,
+          uploadedAt: new Date().toISOString(),
+          applicationId: null, // Will be updated after application is created
+        });
+
+        documents.proofOfFamily = fileDoc.id;
+        console.log(
+          "Proof of family file uploaded:",
+          fileName,
+          "Doc ID:",
+          fileDoc.id
+        );
       }
 
       if (guardianConsentFile) {
         const fileName = `guardianConsent_${Date.now()}_${
           guardianConsentFile.name
         }`;
-        documents.guardianConsent = `uploaded:${fileName}`;
-        console.log("Guardian consent file uploaded:", fileName);
+        const fileBuffer = await guardianConsentFile.arrayBuffer();
+        const base64Content = Buffer.from(fileBuffer).toString("base64");
+
+        // Store file in Firestore
+        const fileDoc = await adminDb.collection("uploadedDocuments").add({
+          userId,
+          fileName,
+          fileType: guardianConsentFile.type,
+          fileSize: guardianConsentFile.size,
+          content: base64Content,
+          uploadedAt: new Date().toISOString(),
+          applicationId: null, // Will be updated after application is created
+        });
+
+        documents.guardianConsent = fileDoc.id;
+        console.log(
+          "Guardian consent file uploaded:",
+          fileName,
+          "Doc ID:",
+          fileDoc.id
+        );
       }
     } catch (fileError: any) {
       console.error("File upload error:", fileError);
@@ -125,6 +181,32 @@ export async function POST(request: Request) {
     const docRef = await adminDb
       .collection("familyTreeApplications")
       .add(application);
+
+    // Update document records with application ID
+    if (documents.nationalId) {
+      await adminDb
+        .collection("uploadedDocuments")
+        .doc(documents.nationalId)
+        .update({
+          applicationId: docRef.id,
+        });
+    }
+    if (documents.proofOfFamily) {
+      await adminDb
+        .collection("uploadedDocuments")
+        .doc(documents.proofOfFamily)
+        .update({
+          applicationId: docRef.id,
+        });
+    }
+    if (documents.guardianConsent) {
+      await adminDb
+        .collection("uploadedDocuments")
+        .doc(documents.guardianConsent)
+        .update({
+          applicationId: docRef.id,
+        });
+    }
 
     // Create notification for user
     await adminDb.collection("notifications").add({
@@ -174,7 +256,7 @@ export async function GET(request: Request) {
       .orderBy("createdAt", "desc")
       .get();
 
-    const applications = applicationsSnapshot.docs.map((doc) => ({
+    const applications = applicationsSnapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data(),
     }));
