@@ -242,17 +242,22 @@ export async function POST(request: Request) {
 // GET /api/family-tree/application?userId=... - Get user's application status
 export async function GET(request: Request) {
   try {
+    console.log("🔍 Family tree application GET API called");
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
 
+    console.log("👤 User ID:", userId);
+
     if (!userId) {
+      console.log("❌ No user ID provided");
       return NextResponse.json(
         { error: "User ID is required" },
         { status: 400 }
       );
     }
 
-    console.log("Getting applications for user:", userId);
+    console.log("🔍 Getting applications for user:", userId);
 
     // Get user's applications (most recent first)
     const applicationsSnapshot = await adminDb
@@ -261,12 +266,14 @@ export async function GET(request: Request) {
       .orderBy("createdAt", "desc")
       .get();
 
+    console.log("📊 Applications snapshot:", applicationsSnapshot.docs.length);
+
     const applications = applicationsSnapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    console.log("Found applications:", applications.length);
+    console.log("✅ Found applications:", applications.length);
 
     return NextResponse.json({
       applications: applications || [],
@@ -275,7 +282,7 @@ export async function GET(request: Request) {
       lastApplication: applications.length > 0 ? applications[0] : null,
     });
   } catch (error: any) {
-    console.error("Get application error:", error);
+    console.error("❌ Get application error:", error);
     return NextResponse.json(
       { error: "Failed to get application", detail: error.message },
       { status: 500 }

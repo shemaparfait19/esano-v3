@@ -1,29 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase-admin";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  limit,
-  orderBy,
-} from "firebase/firestore";
+import { adminDb } from "@/lib/firebase-admin";
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("🔍 Family tree suggestions API called");
+
     const { searchParams } = new URL(request.url);
     const searchQuery = searchParams.get("q") || "";
     const limitCount = parseInt(searchParams.get("limit") || "10");
 
+    console.log("📝 Search query:", searchQuery, "Limit:", limitCount);
+
     // Get all family trees that are public or shared
-    const familyTreesRef = collection(db, "familyTrees");
-    let q = query(familyTreesRef, limit(limitCount));
+    const familyTreesRef = adminDb.collection("familyTrees");
+    let q = familyTreesRef.limit(limitCount);
+
+    console.log("🔗 Query created, executing...");
 
     // If there's a search query, we'll filter by family head name
     if (searchQuery.trim()) {
       // For now, we'll get all trees and filter by family head name
       // In a real implementation, you'd want to use Firestore's text search or Algolia
-      const snapshot = await getDocs(q);
+      const snapshot = await q.get();
+      console.log("📊 Snapshot received, docs:", snapshot.docs.length);
+
       const trees = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -45,6 +45,8 @@ export async function GET(request: NextRequest) {
         );
       });
 
+      console.log("✅ Filtered trees:", filteredTrees.length);
+
       return NextResponse.json({
         success: true,
         suggestions: filteredTrees.slice(0, limitCount),
@@ -52,11 +54,15 @@ export async function GET(request: NextRequest) {
       });
     } else {
       // Get recent family trees
-      const snapshot = await getDocs(q);
+      const snapshot = await q.get();
+      console.log("📊 Snapshot received, docs:", snapshot.docs.length);
+
       const trees = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+
+      console.log("✅ Returning trees:", trees.length);
 
       return NextResponse.json({
         success: true,
@@ -65,9 +71,13 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("Error fetching family tree suggestions:", error);
+    console.error("❌ Error fetching family tree suggestions:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch suggestions" },
+      {
+        success: false,
+        error: "Failed to fetch suggestions",
+        detail: error.message,
+      },
       { status: 500 }
     );
   }
