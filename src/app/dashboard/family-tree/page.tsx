@@ -99,7 +99,6 @@ export default function FamilyTreePage() {
     left: number;
     top: number;
   }>({ left: 0, top: 0 });
-
   const [readonly, setReadonly] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -130,6 +129,10 @@ export default function FamilyTreePage() {
     lastApplication: null,
   });
 
+  const [lastLoadTime, setLastLoadTime] = useState(0);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [lastPresenceWrite, setLastPresenceWrite] = useState<number>(0);
+
   // Load family tree on mount
   useEffect(() => {
     if (user?.uid) {
@@ -143,12 +146,14 @@ export default function FamilyTreePage() {
 
     const checkApplicationStatus = async () => {
       try {
-        const res = await fetch(`/api/family-tree/application?userId=${user.uid}`);
+        const res = await fetch(
+          `/api/family-tree/application?userId=${user.uid}`
+        );
         const data = await res.json();
 
         if (res.ok && data.applications) {
           const applications = data.applications;
-          const lastApplication = applications[0]; // Most recent
+          const lastApplication = applications[0];
 
           setApplicationStatus({
             hasApplication: applications.length > 0,
@@ -164,9 +169,9 @@ export default function FamilyTreePage() {
     checkApplicationStatus();
   }, [user?.uid, ownerIdParam, userProfile?.familyTreeApproved]);
 
-  // Load access requests once when user changes
+  // Load access requests
   useEffect(() => {
-    if (!user?.uid || ownerIdParam) return; // Only for own tree
+    if (!user?.uid || ownerIdParam) return;
 
     const loadAccessRequests = async () => {
       try {
@@ -192,30 +197,148 @@ export default function FamilyTreePage() {
     loadAccessRequests();
   }, [user?.uid, ownerIdParam]);
 
-  // Lightweight polling to reflect remote edits in near real-time, including shared trees
+  // Live search for Join Existing Tree
   useEffect(() => {
-    if (!user?.uid) return;
+    const q = joinQuery.trim();
+    if (q.length < 2) {
+      setJoinResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        setJoinLoading(true);
+        const res = await fetch(
+          `/api/family-tree/search?q=${encodeURIComponent(q)}&limit=12`
+        );
+        const d = await res.json();
+        if (res.ok) setJoinResults(d.items || []);
+      } catch {
+      } finally {
+        setJoinLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [joinQuery]);
 
-    // Only poll if user is actively viewing the page (not minimized/hidden)
-    const isPageVisible = () => !document.hidden;
+  // Suggestion logic
+  useEffect(() => {
+    if (
+      !newRelationship.fromId ||
+      !newRelationship.toId ||
+      !newRelationship.type
+    ) {
+      setSuggestion(null);
+      return;
+    }
+    if (newRelationship.type === "parent") {
+      const parentId = newRelationship.fromId;
+      const childId = newRelationship.toId;
+      const hasOtherParent = edges.some(
+        (e) =>
+          e.type === "parent" && e.toId === childId && e.fromId !== parentId
+      );
+      if (!hasOtherParent) {
+        const possibleSpouses = edges
+          .filter(
+            (e) =>
+              e.type === "spouse" &&
+              (e.fromId === parentId || e.toId === parentId)
+          )
+          .map((e) => (e.fromId === parentId ? e.toId : e.fromId));
+        if (possibleSpouses.length > 0) {
+          const name =
+            members.find((m) => m.id === possibleSpouses[0])?.fullName ||
+            "their spouse";
+          setSuggestion(`Also add ${name} as a parent of this child?`);
+          return;
+        }
+      }
+    }
+    setSuggestion(null);
+  }, [newRelationship, edges, members]);
 
-    // Disable polling for now to prevent blinking - can be re-enabled later with better optimization
-    // const interval = setInterval(() => {
-    //   // Only refresh if page is visible, not dirty, and not already loading
-    //   if (isPageVisible() && !dirty && !isLoading) {
-    //     loadFamilyTree();
-    //   }
-    // }, 10000); // Reduced from 3s to 10s to reduce blinking
+  // Highlight path
+  useEffect(() => {
+    if (!selectedNode) {
+      useFamilyTreeStore
+        .getState()
+        .setRenderOptions({ highlightPath: undefined });
+      return;
+    }
+    const visited = new Set<string>();
+    const stack = [selectedNode];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (visited.has(cur)) continue;
+      visited.add(cur);
+      edges
+        .filter((e) => e.type === "parent" && e.fromId === cur)
+        .forEach((e) => stack.push(e.toId));
+    }
+    const up = [selectedNode];
+    while (up.length) {
+      const cur = up.pop()!;
+      edges
+        .filter((e) => e.type === "parent" && e.toId === cur)
+        .forEach((e) => {
+          if (!visited.has(e.fromId)) {
+            visited.add(e.fromId);
+            up.push(e.fromId);
+          }
+        });
+    }
+    useFamilyTreeStore
+      .getState()
+      .setRenderOptions({ highlightPath: Array.from(visited) });
+  }, [selectedNode, edges]);
 
-    // return () => clearInterval(interval);
-  }, [user?.uid, ownerIdParam, dirty, isLoading]);
+  // Container rect
+  useEffect(() => {
+    const treeOwner = ownerIdParam || user?.uid;
+    if (!user?.uid || !treeOwner) return;
+    const viewport = document.getElementById("tree-viewport");
+    const updateRect = () => {
+      const r = viewport?.getBoundingClientRect();
+      if (r) setContainerRect({ left: r.left, top: r.top });
+    };
+    updateRect();
+    window.addEventListener("resize", updateRect);
+    return () => window.removeEventListener("resize", updateRect);
+  }, [user?.uid]);
 
-  // Add debounce to prevent rapid successive calls
-  const [lastLoadTime, setLastLoadTime] = useState(0);
+  // Presence
+  useEffect(() => {
+    const treeOwner = ownerIdParam || user?.uid;
+    if (!user?.uid || !treeOwner) return;
+    try {
+      const presCol = collection(db, "familyTrees", treeOwner, "presence");
+      const unsub = onSnapshot(
+        presCol,
+        (snap) => {
+          const items = snap.docs
+            .map((d) => ({ id: d.id, ...(d.data() as any) }))
+            .filter((p) => p.id !== user.uid);
+          setPresence(items);
+        },
+        (err) => {
+          console.warn("presence onSnapshot error", err?.code || err?.message);
+        }
+      );
+      return () => unsub();
+    } catch (e) {}
+  }, [user?.uid, ownerIdParam]);
+
+  // Auto-save
+  useEffect(() => {
+    if (!dirty || readonly) return;
+    const t = setTimeout(() => {
+      saveFamilyTree();
+    }, 800);
+    return () => clearTimeout(t);
+  }, [dirty, readonly]);
 
   const loadFamilyTree = async () => {
     const now = Date.now();
-    // Prevent loading if called within last 5 seconds
     if (now - lastLoadTime < 5000) {
       console.log("Skipping loadFamilyTree - too soon");
       return;
@@ -245,11 +368,8 @@ export default function FamilyTreePage() {
         setReadonly(share.role !== "editor");
         setViewerRole(share.role);
         try {
-          const snap = await (
-            await import("firebase/firestore")
-          ).getDoc(
-            (await import("firebase/firestore")).doc(db, "users", ownerIdParam)
-          );
+          const { getDoc, doc } = await import("firebase/firestore");
+          const snap = await getDoc(doc(db, "users", ownerIdParam));
           const ud = snap.exists() ? (snap.data() as any) : null;
           setOwnerName(
             ud?.fullName || ud?.preferredName || ud?.firstName || ownerIdParam
@@ -290,13 +410,8 @@ export default function FamilyTreePage() {
               const entries: [string, string][] = [];
               for (const s of d.shares || []) {
                 try {
-                  const snap = await (
-                    await import("firebase/firestore")
-                  ).getDoc(
-                    (
-                      await import("firebase/firestore")
-                    ).doc(db, "users", s.targetUserId)
-                  );
+                  const { getDoc, doc } = await import("firebase/firestore");
+                  const snap = await getDoc(doc(db, "users", s.targetUserId));
                   const ud = snap.exists() ? (snap.data() as any) : null;
                   const name =
                     ud?.fullName ||
@@ -314,7 +429,6 @@ export default function FamilyTreePage() {
         } catch {}
       }
 
-      // Load suggested trees for discovery when viewing own tree
       if (!ownerIdParam) {
         try {
           setSuggestedLoading(true);
@@ -353,17 +467,11 @@ export default function FamilyTreePage() {
 
     try {
       setSaving(true);
-
       const targetOwner = ownerIdParam || user.uid;
       const response = await fetch("/api/family-tree", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: targetOwner,
-          tree,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: targetOwner, tree }),
       });
 
       const data = await response.json();
@@ -388,14 +496,6 @@ export default function FamilyTreePage() {
     }
   };
 
-  useEffect(() => {
-    if (!dirty || readonly) return;
-    const t = setTimeout(() => {
-      saveFamilyTree();
-    }, 800);
-    return () => clearTimeout(t);
-  }, [dirty, readonly]);
-
   const handleAddMember = () => {
     if (readonly) {
       toast({ title: "View only", description: "You have view access only." });
@@ -409,23 +509,6 @@ export default function FamilyTreePage() {
       tags: [],
       customFields: {},
     });
-  };
-
-  const handleAskAI = async () => {
-    const ownerId = ownerIdParam || user?.uid;
-    if (!ownerId || !askText.trim()) return;
-    try {
-      const res = await fetch("/api/family-tree/ai/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ownerId, question: askText.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      setAskAnswer(data.answer || "");
-    } catch (e: any) {
-      setAskAnswer(e?.message || "Failed to ask");
-    }
   };
 
   const handleRequestAccess = async (
@@ -457,61 +540,6 @@ export default function FamilyTreePage() {
       });
     }
   };
-
-  const handleApproveRequest = async (
-    requestId: string,
-    decision: "accept" | "deny"
-  ) => {
-    try {
-      const res = await fetch("/api/family-tree/access-request", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: requestId, decision }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      toast({
-        title: decision === "accept" ? "Access granted" : "Access denied",
-      });
-      // Reload requests
-      const res2 = await fetch(
-        `/api/family-tree/access-request?ownerId=${user?.uid}`
-      );
-      const d2 = await res2.json();
-      if (res2.ok) setAccessRequests(d2.items || []);
-    } catch (e: any) {
-      toast({
-        title: "Failed",
-        description: e?.message || "",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Live search for Join Existing Tree
-  useEffect(() => {
-    const q = joinQuery.trim();
-    if (q.length < 2) {
-      setJoinResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      try {
-        setJoinLoading(true);
-        console.log(`Searching for: "${q}"`);
-        const res = await fetch(
-          `/api/family-tree/search?q=${encodeURIComponent(q)}&limit=12`
-        );
-        const d = await res.json();
-        console.log(`Search response:`, d);
-        if (res.ok) setJoinResults(d.items || []);
-      } catch {
-      } finally {
-        setJoinLoading(false);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [joinQuery]);
 
   const handleSaveMember = () => {
     if (!newMember.firstName || !newMember.lastName) {
@@ -556,9 +584,7 @@ export default function FamilyTreePage() {
     }
 
     setShowAddRelationshipDialog(true);
-    setNewRelationship({
-      type: "parent",
-    });
+    setNewRelationship({ type: "parent" });
   };
 
   const handleSaveRelationship = () => {
@@ -585,43 +611,6 @@ export default function FamilyTreePage() {
     setNewRelationship({});
     setDirty(true);
   };
-
-  const [suggestion, setSuggestion] = useState<string | null>(null);
-  useEffect(() => {
-    if (
-      !newRelationship.fromId ||
-      !newRelationship.toId ||
-      !newRelationship.type
-    ) {
-      setSuggestion(null);
-      return;
-    }
-    if (newRelationship.type === "parent") {
-      const parentId = newRelationship.fromId;
-      const childId = newRelationship.toId;
-      const hasOtherParent = edges.some(
-        (e) =>
-          e.type === "parent" && e.toId === childId && e.fromId !== parentId
-      );
-      if (!hasOtherParent) {
-        const possibleSpouses = edges
-          .filter(
-            (e) =>
-              e.type === "spouse" &&
-              (e.fromId === parentId || e.toId === parentId)
-          )
-          .map((e) => (e.fromId === parentId ? e.toId : e.fromId));
-        if (possibleSpouses.length > 0) {
-          const name =
-            members.find((m) => m.id === possibleSpouses[0])?.fullName ||
-            "their spouse";
-          setSuggestion(`Also add ${name} as a parent of this child?`);
-          return;
-        }
-      }
-    }
-    setSuggestion(null);
-  }, [newRelationship, edges, members]);
 
   const handleNodeClick = (nodeId: string) => {
     setSelectedNode(nodeId);
@@ -695,41 +684,6 @@ export default function FamilyTreePage() {
     }
   };
 
-  useEffect(() => {
-    const treeOwner = ownerIdParam || user?.uid;
-    if (!user?.uid || !treeOwner) return;
-    const viewport = document.getElementById("tree-viewport");
-    const updateRect = () => {
-      const r = viewport?.getBoundingClientRect();
-      if (r) setContainerRect({ left: r.left, top: r.top });
-    };
-    updateRect();
-    window.addEventListener("resize", updateRect);
-    return () => window.removeEventListener("resize", updateRect);
-  }, [user?.uid]);
-
-  useEffect(() => {
-    const treeOwner = ownerIdParam || user?.uid;
-    if (!user?.uid || !treeOwner) return;
-    try {
-      const presCol = collection(db, "familyTrees", treeOwner, "presence");
-      const unsub = onSnapshot(
-        presCol,
-        (snap) => {
-          const items = snap.docs
-            .map((d) => ({ id: d.id, ...(d.data() as any) }))
-            .filter((p) => p.id !== user.uid);
-          setPresence(items);
-        },
-        (err) => {
-          console.warn("presence onSnapshot error", err?.code || err?.message);
-        }
-      );
-      return () => unsub();
-    } catch (e) {}
-  }, [user?.uid, ownerIdParam]);
-
-  const [lastPresenceWrite, setLastPresenceWrite] = useState<number>(0);
   const writePresence = async (worldX: number, worldY: number) => {
     const treeOwner = ownerIdParam || user?.uid;
     if (!user?.uid || !treeOwner) return;
@@ -753,13 +707,6 @@ export default function FamilyTreePage() {
 
   const handleToggleFullscreen = () => {
     setFullscreen(!isFullscreen);
-  };
-
-  const handleOpenSettings = () => {
-    toast({
-      title: "Settings",
-      description: "Settings panel coming soon",
-    });
   };
 
   const handleAISuggestions = async () => {
@@ -796,40 +743,6 @@ export default function FamilyTreePage() {
     }
   };
 
-  useEffect(() => {
-    if (!selectedNode) {
-      useFamilyTreeStore
-        .getState()
-        .setRenderOptions({ highlightPath: undefined });
-      return;
-    }
-    const visited = new Set<string>();
-    const stack = [selectedNode];
-    while (stack.length) {
-      const cur = stack.pop()!;
-      if (visited.has(cur)) continue;
-      visited.add(cur);
-      edges
-        .filter((e) => e.type === "parent" && e.fromId === cur)
-        .forEach((e) => stack.push(e.toId));
-    }
-    const up = [selectedNode];
-    while (up.length) {
-      const cur = up.pop()!;
-      edges
-        .filter((e) => e.type === "parent" && e.toId === cur)
-        .forEach((e) => {
-          if (!visited.has(e.fromId)) {
-            visited.add(e.fromId);
-            up.push(e.fromId);
-          }
-        });
-    }
-    useFamilyTreeStore
-      .getState()
-      .setRenderOptions({ highlightPath: Array.from(visited) });
-  }, [selectedNode, edges]);
-
   if (isLoading && !tree) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -857,11 +770,13 @@ export default function FamilyTreePage() {
   }
 
   return (
-    <div className={`flex flex-col h-full w-full ${isFullscreen ? "fixed inset-0 z-50 bg-white" : ""}`}>
-      {/* Fixed Toolbar Header */}
+    <div
+      className={`flex flex-col h-full w-full ${
+        isFullscreen ? "fixed inset-0 z-50 bg-white" : ""
+      }`}
+    >
       <div className="flex-none border-b bg-white sticky top-0 z-20">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
-          {/* Left section - Main actions */}
           <div className="flex items-center gap-2 flex-wrap">
             {ownerIdParam && ownerIdParam !== user?.uid && (
               <div className="mr-2 flex items-center gap-2 text-sm text-muted-foreground">
@@ -896,9 +811,7 @@ export default function FamilyTreePage() {
             </Button>
           </div>
 
-          {/* Right section - Tools */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Saving indicator */}
             <div className="hidden sm:flex items-center text-xs text-muted-foreground mr-2 min-w-[90px] justify-end">
               {dirty ? (
                 isSaving ? (
@@ -978,10 +891,8 @@ export default function FamilyTreePage() {
         </div>
       </div>
 
-      {/* Ask AI & Suggested Trees */}
       <div className="flex-none border-b bg-white/60">
         <div className="px-4 py-3 flex flex-col gap-3">
-          {/* Collapsible suggested trees section */}
           {!ownerIdParam && tree && (tree?.members?.length || 0) > 0 && (
             <div className="mt-1">
               <div className="flex items-center justify-between mb-2">
@@ -1050,11 +961,9 @@ export default function FamilyTreePage() {
         </div>
       </div>
 
-      {/* New user default view: Start or Join */}
       {(!tree || (tree?.members?.length || 0) === 0) && !ownerIdParam && (
         <div className="flex-none border-b bg-white/60">
           <div className="px-4 py-6">
-            {/* Show application form if user doesn't have family tree approval */}
             {!userProfile?.familyTreeApproved && !userProfile?.familyCode ? (
               <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-6">
@@ -1062,43 +971,54 @@ export default function FamilyTreePage() {
                     Welcome to Family Tree
                   </h2>
                   <p className="text-muted-foreground">
-                    To create your own family tree, please submit an application for review
+                    To create your own family tree, please submit an application
+                    for review
                   </p>
                 </div>
-                
-                {/* Show application status if user has submitted one */}
+
                 {applicationStatus.hasApplication && (
                   <div className="mb-6">
                     {applicationStatus.status === "pending" && (
                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
                         <div className="text-yellow-800">
-                          <h3 className="font-semibold mb-2">Application Under Review</h3>
+                          <h3 className="font-semibold mb-2">
+                            Application Under Review
+                          </h3>
                           <p className="text-sm">
-                            Your family tree application is being reviewed. You will be notified of the decision within 2-3 business days.
+                            Your family tree application is being reviewed. You
+                            will be notified of the decision within 2-3 business
+                            days.
                           </p>
                           <p className="text-xs mt-2">
-                            Submitted: {new Date(applicationStatus.lastApplication?.createdAt).toLocaleDateString()}
+                            Submitted:{" "}
+                            {new Date(
+                              applicationStatus.lastApplication?.createdAt
+                            ).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
                     )}
-                    
+
                     {applicationStatus.status === "denied" && (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
                         <div className="text-red-800">
-                          <h3 className="font-semibold mb-2">Application Denied</h3>
+                          <h3 className="font-semibold mb-2">
+                            Application Denied
+                          </h3>
                           <p className="text-sm">
-                            {applicationStatus.lastApplication?.adminNotes || "Your application was not approved at this time."}
+                            {applicationStatus.lastApplication?.adminNotes ||
+                              "Your application was not approved at this time."}
                           </p>
                           <p className="text-xs mt-2">
-                            You can submit a new application with additional information.
+                            You can submit a new application with additional
+                            information.
                           </p>
                         </div>
                       </div>
                     )}
                   </div>
                 )}
-                
+
                 <FamilyTreeApplicationForm />
               </div>
             ) : (
@@ -1182,16 +1102,17 @@ export default function FamilyTreePage() {
                           </div>
                         </div>
                       ))}
-                      {!joinLoading && joinQuery && joinResults.length === 0 && (
-                        <div className="text-xs text-muted-foreground text-center">
-                          No trees found matching your search
-                        </div>
-                      )}
+                      {!joinLoading &&
+                        joinQuery &&
+                        joinResults.length === 0 && (
+                          <div className="text-xs text-muted-foreground text-center">
+                            No trees found matching your search
+                          </div>
+                        )}
                     </div>
                   </div>
                 </div>
 
-                {/* Interesting Suggestions Button */}
                 <div className="mt-6 text-center">
                   <Button
                     variant="outline"
@@ -1255,12 +1176,10 @@ export default function FamilyTreePage() {
         </div>
       )}
 
-      {/* Canvas Container */}
       <div
         id="tree-viewport"
         className="flex-1 relative overflow-hidden bg-gray-50"
       >
-        {/* Debug info */}
         <div className="absolute top-2 left-2 z-10 bg-black/80 text-white text-xs p-2 rounded">
           Tree: {tree ? "Loaded" : "Not loaded"} | Members:{" "}
           {tree?.members?.length || 0} | Loading: {isLoading ? "Yes" : "No"} |
@@ -1290,7 +1209,6 @@ export default function FamilyTreePage() {
           </div>
         )}
 
-        {/* Mobile Floating Action Button */}
         <div className="sm:hidden absolute bottom-4 right-4 flex flex-col gap-2">
           <Button
             size="icon"
@@ -1302,7 +1220,6 @@ export default function FamilyTreePage() {
           </Button>
         </div>
 
-        {/* Node Editor Sidebar */}
         {editingNode && (
           <div className="absolute top-4 right-4 z-30 max-w-sm w-full sm:w-96">
             <NodeEditor
@@ -1321,7 +1238,6 @@ export default function FamilyTreePage() {
         )}
       </div>
 
-      {/* Add Member Dialog */}
       <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1394,3 +1310,281 @@ export default function FamilyTreePage() {
                 </Select>
               </div>
             </div>
+
+            <div>
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                value={newMember.location || ""}
+                onChange={(e) =>
+                  setNewMember((prev) => ({
+                    ...prev,
+                    location: e.target.value,
+                  }))
+                }
+                placeholder="Birth place, residence, etc."
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleSaveMember} className="flex-1">
+                Add Member
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddMemberDialog(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showAddRelationshipDialog}
+        onOpenChange={setShowAddRelationshipDialog}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Relationship</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="fromMember">From Member</Label>
+              <Select
+                value={newRelationship.fromId || ""}
+                onValueChange={(value) =>
+                  setNewRelationship((prev) => ({ ...prev, fromId: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select first member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="relationshipType">Relationship Type</Label>
+              <Select
+                value={newRelationship.type || ""}
+                onValueChange={(value) =>
+                  setNewRelationship((prev) => ({
+                    ...prev,
+                    type: value as any,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select relationship" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="parent">Parent</SelectItem>
+                  <SelectItem value="spouse">Spouse</SelectItem>
+                  <SelectItem value="adoptive">Adoptive</SelectItem>
+                  <SelectItem value="step">Step</SelectItem>
+                  <SelectItem value="big_sister">Big Sister</SelectItem>
+                  <SelectItem value="little_sister">Little Sister</SelectItem>
+                  <SelectItem value="big_brother">Big Brother</SelectItem>
+                  <SelectItem value="little_brother">Little Brother</SelectItem>
+                  <SelectItem value="aunt">Aunt</SelectItem>
+                  <SelectItem value="uncle">Uncle</SelectItem>
+                  <SelectItem value="cousin_big">Cousin (Older)</SelectItem>
+                  <SelectItem value="cousin_little">
+                    Cousin (Younger)
+                  </SelectItem>
+                  <SelectItem value="guardian">Guardian</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="toMember">To Member</Label>
+              <Select
+                value={newRelationship.toId || ""}
+                onValueChange={(value) =>
+                  setNewRelationship((prev) => ({ ...prev, toId: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select second member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {suggestion && (
+              <div className="text-xs text-muted-foreground p-2 bg-blue-50 rounded">
+                {suggestion}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleSaveRelationship} className="flex-1">
+                Add Relationship
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddRelationshipDialog(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Share Family Tree</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {shares.length > 0 && (
+              <div>
+                <Label className="text-sm font-medium">
+                  Currently shared with
+                </Label>
+                <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                  {shares.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-gray-50"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {shareNames[s.targetUserId] ||
+                            s.targetEmail ||
+                            s.targetUserId}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {s.role}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Select
+                          value={s.role}
+                          onValueChange={async (v) => {
+                            try {
+                              await fetch("/api/family-tree/share", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  ownerId: user?.uid,
+                                  targetUserId: s.targetUserId,
+                                  role: v,
+                                }),
+                              });
+                              setShares((prev) =>
+                                prev.map((p) =>
+                                  p.id === s.id ? { ...p, role: v } : p
+                                )
+                              );
+                            } catch {}
+                          }}
+                        >
+                          <SelectTrigger className="h-7 w-24 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="viewer">Viewer</SelectItem>
+                            <SelectItem value="editor">Editor</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={async () => {
+                            try {
+                              await fetch(
+                                `/api/family-tree/share?ownerId=${user?.uid}&targetUserId=${s.targetUserId}`,
+                                {
+                                  method: "DELETE",
+                                }
+                              );
+                              setShares((prev) =>
+                                prev.filter((p) => p.id !== s.id)
+                              );
+                            } catch {}
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <Label className="text-sm font-medium">
+                Share with new person
+              </Label>
+              <div className="mt-2 space-y-3">
+                <div>
+                  <Label htmlFor="shareEmail" className="text-xs">
+                    Email
+                  </Label>
+                  <Input
+                    id="shareEmail"
+                    type="email"
+                    value={shareEmail}
+                    onChange={(e) => setShareEmail(e.target.value)}
+                    placeholder="friend@example.com"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="shareRole" className="text-xs">
+                    Permission
+                  </Label>
+                  <Select
+                    value={shareRole}
+                    onValueChange={(v) => setShareRole(v as any)}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer (read-only)</SelectItem>
+                      <SelectItem value="editor">Editor (can edit)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleShare} className="flex-1">
+                Share
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShareDialogOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
