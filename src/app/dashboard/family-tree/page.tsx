@@ -44,9 +44,10 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
+import { FamilyTreeApplicationForm } from "@/components/family-tree/application-form";
 
 export default function FamilyTreePage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const ownerIdParam = searchParams?.get("ownerId") || undefined;
@@ -119,6 +120,15 @@ export default function FamilyTreePage() {
   const [joinResults, setJoinResults] = useState<Array<any>>([]);
   const [accessRequests, setAccessRequests] = useState<Array<any>>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
+  const [applicationStatus, setApplicationStatus] = useState<{
+    hasApplication: boolean;
+    status: "pending" | "approved" | "denied" | null;
+    lastApplication: any;
+  }>({
+    hasApplication: false,
+    status: null,
+    lastApplication: null,
+  });
 
   // Load family tree on mount
   useEffect(() => {
@@ -126,6 +136,33 @@ export default function FamilyTreePage() {
       loadFamilyTree();
     }
   }, [user?.uid, ownerIdParam]);
+
+  // Check application status for users without family tree approval
+  useEffect(() => {
+    if (!user?.uid || ownerIdParam || userProfile?.familyTreeApproved) return;
+
+    const checkApplicationStatus = async () => {
+      try {
+        const res = await fetch(`/api/family-tree/application?userId=${user.uid}`);
+        const data = await res.json();
+        
+        if (res.ok && data.applications) {
+          const applications = data.applications;
+          const lastApplication = applications[0]; // Most recent
+          
+          setApplicationStatus({
+            hasApplication: applications.length > 0,
+            status: lastApplication?.status || null,
+            lastApplication,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to check application status:", error);
+      }
+    };
+
+    checkApplicationStatus();
+  }, [user?.uid, ownerIdParam, userProfile?.familyTreeApproved]);
 
   // Load access requests once when user changes
   useEffect(() => {
@@ -1021,28 +1058,77 @@ export default function FamilyTreePage() {
       {(!tree || (tree?.members?.length || 0) === 0) && !ownerIdParam && (
         <div className="flex-none border-b bg-white/60">
           <div className="px-4 py-6">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold mb-2">
-                Welcome to Family Tree
-              </h2>
-              <p className="text-muted-foreground">
-                Start building your family tree or join an existing one
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-              <div className="border rounded-lg p-6 bg-white text-center">
-                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Plus className="h-6 w-6 text-primary" />
+            {/* Show application form if user doesn't have family tree approval */}
+            {!userProfile?.familyTreeApproved && !userProfile?.familyCode ? (
+              <div className="max-w-4xl mx-auto">
+                <div className="text-center mb-6">
+                  <h2 className="text-xl font-semibold mb-2">
+                    Welcome to Family Tree
+                  </h2>
+                  <p className="text-muted-foreground">
+                    To create your own family tree, please submit an application for review
+                  </p>
                 </div>
-                <h3 className="font-semibold mb-2">Start Your Own Tree</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Create your family tree by adding your first member
-                </p>
-                <Button onClick={handleAddMember} className="w-full">
-                  Add First Member
-                </Button>
+                
+                {/* Show application status if user has submitted one */}
+                {applicationStatus.hasApplication && (
+                  <div className="mb-6">
+                    {applicationStatus.status === "pending" && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                        <div className="text-yellow-800">
+                          <h3 className="font-semibold mb-2">Application Under Review</h3>
+                          <p className="text-sm">
+                            Your family tree application is being reviewed. You will be notified of the decision within 2-3 business days.
+                          </p>
+                          <p className="text-xs mt-2">
+                            Submitted: {new Date(applicationStatus.lastApplication?.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {applicationStatus.status === "denied" && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                        <div className="text-red-800">
+                          <h3 className="font-semibold mb-2">Application Denied</h3>
+                          <p className="text-sm">
+                            {applicationStatus.lastApplication?.adminNotes || "Your application was not approved at this time."}
+                          </p>
+                          <p className="text-xs mt-2">
+                            You can submit a new application with additional information.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <FamilyTreeApplicationForm />
               </div>
+            ) : (
+              <>
+                <div className="text-center mb-6">
+                  <h2 className="text-xl font-semibold mb-2">
+                    Welcome to Family Tree
+                  </h2>
+                  <p className="text-muted-foreground">
+                    Start building your family tree or join an existing one
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                  <div className="border rounded-lg p-6 bg-white text-center">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Plus className="h-6 w-6 text-primary" />
+                    </div>
+                    <h3 className="font-semibold mb-2">Start Your Own Tree</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Create your family tree by adding your first member
+                    </p>
+                    <Button onClick={handleAddMember} className="w-full">
+                      Add First Member
+                    </Button>
+                  </div>
 
               <div className="border rounded-lg p-6 bg-white">
                 <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1169,6 +1255,7 @@ export default function FamilyTreePage() {
             </div>
           </div>
         </div>
+      )}
       )}
 
       {/* Canvas Container */}

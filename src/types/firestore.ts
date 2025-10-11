@@ -21,6 +21,10 @@ export interface UserProfile {
     completedAt: string;
   };
   familyTree?: any; // Define a proper type for family tree later
+  // Family code system
+  familyCode?: string; // 8-character family code
+  isFamilyHead?: boolean; // Can generate family codes and manage permissions
+  familyTreeApproved?: boolean; // Admin approval for family tree creation
   createdAt?: string;
   updatedAt?: string;
 }
@@ -74,6 +78,51 @@ export interface FamilyTreeEdge {
   relation: FamilyRelation;
   certainty?: number; // 0..1
   notes?: string;
+}
+
+// Family Tree Application System
+export type ApplicationStatus = "pending" | "approved" | "denied";
+
+export interface FamilyTreeApplication {
+  id?: string;
+  userId: string;
+  userEmail: string;
+  userFullName: string;
+  applicationData: {
+    reasonForTree: string;
+    familyBackground: string;
+    expectedMembers: number;
+    culturalSignificance?: string;
+    additionalInfo?: string;
+  };
+  status: ApplicationStatus;
+  adminNotes?: string;
+  reviewedBy?: string; // Admin user ID
+  reviewedAt?: string; // ISO date
+  createdAt: string; // ISO date
+  updatedAt: string; // ISO date
+}
+
+// Family Code System
+export interface FamilyCode {
+  code: string; // 8-character code
+  generatedBy: string; // User ID of family head
+  familyName?: string;
+  isActive: boolean;
+  createdAt: string; // ISO date
+  expiresAt?: string; // ISO date (optional expiration)
+}
+
+// Admin System
+export interface AdminUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: "super_admin" | "admin" | "moderator";
+  permissions: string[];
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt?: string;
 }
 
 export interface FamilyTree {
