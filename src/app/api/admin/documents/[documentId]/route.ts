@@ -11,6 +11,7 @@ export async function GET(
 ) {
   try {
     const { documentId } = params;
+    console.log("Fetching document with ID:", documentId);
 
     // Get document from Firestore
     const docSnapshot = await adminDb
@@ -18,7 +19,10 @@ export async function GET(
       .doc(documentId)
       .get();
 
+    console.log("Document exists:", docSnapshot.exists);
+
     if (!docSnapshot.exists) {
+      console.log("Document not found in Firestore");
       return NextResponse.json(
         { error: "Document not found" },
         { status: 404 }
