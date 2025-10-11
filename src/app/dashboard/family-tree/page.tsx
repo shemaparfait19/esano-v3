@@ -34,6 +34,20 @@ import {
   Maximize2,
   Sparkles,
   Search,
+  Users,
+  Globe,
+  Edit,
+  Eye,
+  EyeOff,
+  Save,
+  Undo,
+  Redo,
+  Fullscreen,
+  Minimize,
+  X,
+  Check,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
@@ -1022,6 +1036,61 @@ export default function FamilyTreePage() {
                 )}
 
                 <FamilyTreeApplicationForm />
+
+                {/* Suggested Family Trees - For Non-Approved Users */}
+                <div className="mt-8 space-y-4">
+                  <div>
+                    <h2 className="font-headline text-2xl font-bold text-primary">
+                      Suggested Family Trees
+                    </h2>
+                    <p className="text-muted-foreground">
+                      Discover interesting family trees you might want to
+                      explore once your application is approved.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="border rounded-lg p-6 bg-white text-center">
+                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Users className="h-6 w-6 text-primary" />
+                      </div>
+                      <h3 className="font-semibold mb-2">
+                        Explore Public Trees
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Browse family trees shared by the community
+                      </p>
+                      <Button variant="outline" className="w-full" disabled>
+                        Coming Soon
+                      </Button>
+                    </div>
+
+                    <div className="border rounded-lg p-6 bg-white text-center">
+                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Search className="h-6 w-6 text-primary" />
+                      </div>
+                      <h3 className="font-semibold mb-2">Search by Name</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Find family trees by searching for specific names
+                      </p>
+                      <Button variant="outline" className="w-full" disabled>
+                        Coming Soon
+                      </Button>
+                    </div>
+
+                    <div className="border rounded-lg p-6 bg-white text-center">
+                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Globe className="h-6 w-6 text-primary" />
+                      </div>
+                      <h3 className="font-semibold mb-2">Regional Trees</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Explore family trees from your region
+                      </p>
+                      <Button variant="outline" className="w-full" disabled>
+                        Coming Soon
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <>

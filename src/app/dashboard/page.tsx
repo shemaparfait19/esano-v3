@@ -246,8 +246,8 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Family Code Generator for Family Heads */}
-      {userProfile?.isFamilyHead && (
+      {/* Family Code Generator for Approved Users */}
+      {userProfile?.familyTreeApproved && (
         <div className="max-w-md">
           <FamilyCodeGenerator
             userProfile={userProfile}
@@ -443,7 +443,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Suggested Family Trees */}
+      {/* Suggested Family Trees - For Approved Users */}
       {userProfile?.familyTreeApproved && (
         <div className="space-y-4">
           <div>
