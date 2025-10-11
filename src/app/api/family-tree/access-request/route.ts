@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
 // POST /api/family-tree/access-request
 // body: { ownerId: string, requesterId: string, access: "viewer"|"editor", message?: string }
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { ownerId, requesterId, access, message } = body as any;
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 }
 
 // PATCH /api/family-tree/access-request  body: { id, decision: "accept"|"deny" }
-export async function PATCH(request: NextRequest) {
+export async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const { id, decision } = body as any;
@@ -90,7 +90,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 // GET /api/family-tree/access-request?ownerId=...
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const ownerId = searchParams.get("ownerId");
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       .where("ownerId", "==", ownerId)
       .where("status", "==", "pending");
     const snap = await q.get();
-    const items = snap.docs.map((d) => ({
+    const items = snap.docs.map((d: any) => ({
       id: d.id,
       ...(d.data() as any),
     }));

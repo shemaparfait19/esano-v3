@@ -149,7 +149,7 @@ export function DashboardHeader() {
     };
   }, [user?.uid]);
 
-  // Load family tree access requests
+  // Load family tree access requests with real-time updates
   useEffect(() => {
     if (!user?.uid) return;
     console.log("🔍 Loading family tree access requests for user:", user.uid);
