@@ -857,11 +857,7 @@ export default function FamilyTreePage() {
   }
 
   return (
-    <div
-      className={`flex flex-col h-full w-full ${
-        isFullscreen ? "fixed inset-0 z-50 bg-white" : ""
-      }`}
-    >
+    <div className={`flex flex-col h-full w-full ${isFullscreen ? "fixed inset-0 z-50 bg-white" : ""}`}>
       {/* Fixed Toolbar Header */}
       <div className="flex-none border-b bg-white sticky top-0 z-20">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -1257,6 +1253,8 @@ export default function FamilyTreePage() {
         </div>
       )}
       </>
+      </>
+      )}
       )}
 
       {/* Canvas Container */}
