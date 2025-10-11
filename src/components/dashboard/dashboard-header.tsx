@@ -56,6 +56,8 @@ export function DashboardHeader() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [accessRequests, setAccessRequests] = useState<any[]>([]);
   const [accessRequestCount, setAccessRequestCount] = useState(0);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationCount, setNotificationCount] = useState(0);
 
   const handleSignOut = async () => {
     await signOut();
@@ -179,6 +181,41 @@ export function DashboardHeader() {
         console.error("❌ Error loading access requests:", error);
         setAccessRequests([]);
         setAccessRequestCount(0);
+      }
+    );
+    return () => unsub();
+  }, [user?.uid]);
+
+  // Load notifications with real-time updates
+  useEffect(() => {
+    if (!user?.uid) return;
+    console.log("🔔 Loading notifications for user:", user.uid);
+    const ref = collection(db, "notifications");
+    const q = query(
+      ref,
+      where("userId", "==", user.uid),
+      where("status", "==", "unread")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        console.log("🔔 Notifications snapshot:", snap.size, "docs found");
+        const items = snap.docs.map((d) => {
+          const data = d.data() as any;
+          console.log("📄 Notification data:", { id: d.id, ...data });
+          return {
+            id: d.id,
+            ...data,
+          };
+        });
+        console.log("✅ Processed notifications:", items);
+        setNotifications(items);
+        setNotificationCount(items.length);
+      },
+      (error) => {
+        console.error("❌ Error loading notifications:", error);
+        setNotifications([]);
+        setNotificationCount(0);
       }
     );
     return () => unsub();
@@ -364,62 +401,114 @@ export function DashboardHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
               <Bell />
-              {pendingCount > 0 && (
+              {pendingCount + notificationCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  {pendingCount}
+                  {pendingCount + notificationCount}
                 </span>
               )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Pending Requests</DropdownMenuLabel>
+            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {pendingItems.length === 0 && (
+
+            {/* Connection Requests */}
+            {pendingItems.length > 0 && (
+              <>
+                <div className="px-3 py-1 text-xs font-medium text-muted-foreground">
+                  Connection Requests
+                </div>
+                {pendingItems.map((r) => (
+                  <div key={r.id} className="px-3 py-2">
+                    <div className="text-sm">
+                      From: <RequesterName userId={r.fromUserId} />
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          await fetch("/api/requests", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              id: r.id,
+                              status: "accepted",
+                            }),
+                          });
+                        }}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          await fetch("/api/requests", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              id: r.id,
+                              status: "declined",
+                            }),
+                          });
+                        }}
+                      >
+                        Decline
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <DropdownMenuSeparator />
+              </>
+            )}
+
+            {/* Family Tree Notifications */}
+            {notifications.length > 0 && (
+              <>
+                <div className="px-3 py-1 text-xs font-medium text-muted-foreground">
+                  Family Tree Updates
+                </div>
+                {notifications.map((n) => (
+                  <div key={n.id} className="px-3 py-2">
+                    <div className="text-sm font-medium">{n.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {n.message}
+                    </div>
+                    {n.type === "tree_access_accepted" && (
+                      <Button
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          // Mark as read and navigate to shared trees
+                          fetch("/api/notifications/mark-read", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ notificationId: n.id }),
+                          });
+                          router.push("/dashboard/shared-trees");
+                        }}
+                      >
+                        View Shared Trees
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <DropdownMenuSeparator />
+              </>
+            )}
+
+            {pendingItems.length === 0 && notifications.length === 0 && (
               <div className="px-3 py-2 text-sm text-muted-foreground">
-                No pending requests
+                No notifications
               </div>
             )}
-            {pendingItems.map((r) => (
-              <div key={r.id} className="px-3 py-2">
-                <div className="text-sm">
-                  From: <RequesterName userId={r.fromUserId} />
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={async () => {
-                      await fetch("/api/requests", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ id: r.id, status: "accepted" }),
-                      });
-                    }}
-                  >
-                    Accept
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      await fetch("/api/requests", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ id: r.id, status: "declined" }),
-                      });
-                    }}
-                  >
-                    Decline
-                  </Button>
-                </div>
-              </div>
-            ))}
-            <DropdownMenuSeparator />
+
             <Button
               variant="ghost"
               className="w-full justify-start"
               onClick={() => router.push("/dashboard/notifications")}
             >
-              Open Notifications
+              View All Notifications
             </Button>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -18,6 +18,7 @@ export default function NotificationsPage() {
   const { user } = useAuth();
   const [incoming, setIncoming] = useState<any[]>([]);
   const [outgoing, setOutgoing] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     let ignore = false;
@@ -47,6 +48,26 @@ export default function NotificationsPage() {
         if (!ignore) {
           setIncoming([]);
           setOutgoing([]);
+        }
+      }
+
+      // Load notifications
+      try {
+        const notifRef = collection(db, "notifications");
+        const notifQ = query(
+          notifRef,
+          where("userId", "==", user.uid),
+          where("status", "==", "unread")
+        );
+        const notifSnap = await getDocs(notifQ);
+        if (!ignore) {
+          setNotifications(
+            notifSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+          );
+        }
+      } catch {
+        if (!ignore) {
+          setNotifications([]);
         }
       }
     }
@@ -164,6 +185,70 @@ export default function NotificationsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Family Tree Notifications */}
+      {notifications.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline text-xl text-primary">
+              Family Tree Updates
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {notifications.map((n) => (
+              <div
+                key={n.id}
+                className="flex items-center justify-between border p-3 rounded-md"
+              >
+                <div className="flex-1">
+                  <div className="font-medium">{n.title}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {n.message}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(n.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {n.type === "tree_access_accepted" && (
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        // Mark as read and navigate to shared trees
+                        await fetch("/api/notifications/mark-read", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ notificationId: n.id }),
+                        });
+                        window.location.href = "/dashboard/shared-trees";
+                      }}
+                    >
+                      View Shared Trees
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      await fetch("/api/notifications/mark-read", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ notificationId: n.id }),
+                      });
+                      // Remove from local state
+                      setNotifications(
+                        notifications.filter((notif) => notif.id !== n.id)
+                      );
+                    }}
+                  >
+                    Mark Read
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -78,6 +78,36 @@ export async function PATCH(request: Request) {
         },
         { merge: true }
       );
+
+      // Create notification for requester that their request was accepted
+      await adminDb.collection("notifications").add({
+        userId: req.requesterId,
+        type: "tree_access_accepted",
+        title: "Family tree access granted",
+        message: `Your request for ${req.access} access to a family tree has been accepted`,
+        payload: {
+          ownerId: req.ownerId,
+          access: req.access,
+          requestId: id,
+        },
+        status: "unread",
+        createdAt: new Date().toISOString(),
+      });
+    } else if (decision === "deny") {
+      // Create notification for requester that their request was denied
+      await adminDb.collection("notifications").add({
+        userId: req.requesterId,
+        type: "tree_access_denied",
+        title: "Family tree access denied",
+        message: `Your request for ${req.access} access to a family tree has been denied`,
+        payload: {
+          ownerId: req.ownerId,
+          access: req.access,
+          requestId: id,
+        },
+        status: "unread",
+        createdAt: new Date().toISOString(),
+      });
     }
 
     return NextResponse.json({ ok: true });
