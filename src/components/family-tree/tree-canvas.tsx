@@ -28,6 +28,8 @@ interface TreeCanvasProps {
     x?: number;
     y?: number;
   }>;
+  isEditMode?: boolean;
+  showViewResult?: boolean;
 }
 
 export function TreeCanvas({
@@ -36,6 +38,8 @@ export function TreeCanvas({
   onNodeDoubleClick,
   onCanvasClick,
   presence,
+  isEditMode = true,
+  showViewResult = false,
 }: TreeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -492,7 +496,8 @@ export function TreeCanvas({
     ctx.translate(canvasState.panX, canvasState.panY);
     ctx.scale(canvasState.zoom, canvasState.zoom);
 
-    const localLayout = buildHierarchicalLayout();
+    // Use hierarchical layout for "View Result" mode, otherwise use current layout
+    const localLayout = showViewResult ? buildHierarchicalLayout() : layout;
     renderEdges(ctx, localLayout.edges as any[]);
     renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
 
@@ -527,11 +532,13 @@ export function TreeCanvas({
     hoveredNode,
     draggingNode,
     presence,
+    showViewResult,
+    layout,
   ]);
 
   // ===== Get node at position
   const getNodeAtPosition = (worldX: number, worldY: number) => {
-    const localLayout = buildHierarchicalLayout();
+    const localLayout = showViewResult ? buildHierarchicalLayout() : layout;
     return localLayout.nodes.find(
       (node) =>
         worldX >= node.x &&
@@ -575,17 +582,26 @@ export function TreeCanvas({
     const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
     const clickedNode = getNodeAtPosition(worldX, worldY);
 
-    if (clickedNode) {
+    if (clickedNode && isEditMode) {
       setDraggingNode(clickedNode.id);
       setNodeOffsets({ x: worldX - clickedNode.x, y: worldY - clickedNode.y });
       setSelectedNode(clickedNode.id);
       onNodeClick?.(clickedNode.id);
-    } else {
+    } else if (isEditMode) {
       setIsDraggingCanvas(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       setLastPan({ x: canvasState.panX, y: canvasState.panY });
       setSelectedNode(null);
       onCanvasClick?.();
+    } else {
+      // In view mode, just select nodes without dragging
+      if (clickedNode) {
+        setSelectedNode(clickedNode.id);
+        onNodeClick?.(clickedNode.id);
+      } else {
+        setSelectedNode(null);
+        onCanvasClick?.();
+      }
     }
   };
 
@@ -597,7 +613,7 @@ export function TreeCanvas({
       (e.clientX - rect.left - canvasState.panX) / canvasState.zoom;
     const worldY = (e.clientY - rect.top - canvasState.panY) / canvasState.zoom;
 
-    if (draggingNode) {
+    if (draggingNode && isEditMode) {
       const newX = worldX - nodeOffsets.x;
       const newY = worldY - nodeOffsets.y;
 
@@ -605,15 +621,20 @@ export function TreeCanvas({
       if (memberToUpdate) {
         updateMember(draggingNode, { ...memberToUpdate, x: newX, y: newY });
       }
-    } else if (isDraggingCanvas) {
+    } else if (isDraggingCanvas && isEditMode) {
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
       updateCanvasState({ panX: lastPan.x + deltaX, panY: lastPan.y + deltaY });
     } else {
       const hoveredNode = getNodeAtPosition(worldX, worldY);
       setHoveredNode(hoveredNode?.id || null);
-      const e = getEdgeAtPosition(worldX, worldY);
-      if (e) setHoveredEdge({ fromId: e.fromId, toId: e.toId, type: e.type });
+      const edge = getEdgeAtPosition(worldX, worldY);
+      if (edge)
+        setHoveredEdge({
+          fromId: edge.fromId,
+          toId: edge.toId,
+          type: edge.type,
+        });
       else setHoveredEdge(null);
     }
   };

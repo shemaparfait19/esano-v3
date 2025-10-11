@@ -45,6 +45,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { FamilyTreeApplicationForm } from "@/components/family-tree/application-form";
+import { FamilyCodeGenerator } from "@/components/family-tree/family-code-generator";
 
 export default function FamilyTreePage() {
   const { user, userProfile } = useAuth();
@@ -128,6 +129,8 @@ export default function FamilyTreePage() {
     status: null,
     lastApplication: null,
   });
+  const [isEditMode, setIsEditMode] = useState(true);
+  const [showViewResult, setShowViewResult] = useState(false);
 
   const [lastLoadTime, setLastLoadTime] = useState(0);
   const [suggestion, setSuggestion] = useState<string | null>(null);
@@ -1186,6 +1189,59 @@ export default function FamilyTreePage() {
           Error: {error || "None"}
         </div>
 
+        {/* Mode Toggle Controls */}
+        <div className="absolute top-2 right-2 z-10 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Mode:</span>
+            <Button
+              variant={isEditMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setIsEditMode(true);
+                setShowViewResult(false);
+              }}
+              className="text-xs h-8"
+            >
+              ✏️ Edit
+            </Button>
+            <Button
+              variant={!isEditMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setIsEditMode(false);
+                setShowViewResult(true);
+              }}
+              className="text-xs h-8"
+            >
+              👁️ View Result
+            </Button>
+          </div>
+
+          {isEditMode && (
+            <div className="text-xs text-gray-500 mt-1">
+              💡 Drag nodes • Double-click to edit
+            </div>
+          )}
+
+          {showViewResult && (
+            <div className="text-xs text-green-600 font-medium mt-1">
+              ✨ Auto-arranged view
+            </div>
+          )}
+        </div>
+
+        {/* Family Code Generator for Family Heads */}
+        {userProfile?.isFamilyHead && (
+          <div className="absolute top-2 left-2 z-10">
+            <FamilyCodeGenerator
+              userProfile={userProfile}
+              onCodeGenerated={(code) => {
+                console.log("Family code generated:", code);
+              }}
+            />
+          </div>
+        )}
+
         {tree && tree.members && tree.members.length > 0 ? (
           <TreeCanvas
             onNodeClick={handleNodeClick}
@@ -1193,6 +1249,8 @@ export default function FamilyTreePage() {
             onCanvasClick={handleCanvasClick}
             presence={presence}
             className="w-full h-full"
+            isEditMode={isEditMode}
+            showViewResult={showViewResult}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -1221,19 +1279,38 @@ export default function FamilyTreePage() {
         </div>
 
         {editingNode && (
-          <div className="absolute top-4 right-4 z-30 max-w-sm w-full sm:w-96">
-            <NodeEditor
-              nodeId={editingNode}
-              onClose={() => setEditingNode(null)}
-              onSave={(member) => {
-                setEditingNode(null);
-                setTimeout(saveFamilyTree, 500);
-              }}
-              onDelete={(nodeId) => {
-                removeMember(nodeId);
-                setTimeout(saveFamilyTree, 500);
-              }}
-            />
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b px-6 py-4 rounded-t-xl">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Edit Family Member
+                  </h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingNode(null)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    ✕
+                  </Button>
+                </div>
+              </div>
+              <div className="p-6">
+                <NodeEditor
+                  nodeId={editingNode}
+                  onClose={() => setEditingNode(null)}
+                  onSave={(member) => {
+                    setEditingNode(null);
+                    setTimeout(saveFamilyTree, 500);
+                  }}
+                  onDelete={(nodeId) => {
+                    removeMember(nodeId);
+                    setTimeout(saveFamilyTree, 500);
+                  }}
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>
