@@ -45,10 +45,10 @@ export default function AdminLayout({
       if (response.ok) {
         setIsAuthenticated(true);
       } else {
-        router.push("/admin/login");
+        router.push("/admin-login");
       }
     } catch (error) {
-      router.push("/admin/login");
+      router.push("/admin-login");
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +57,7 @@ export default function AdminLayout({
   const handleLogout = async () => {
     try {
       await fetch("/api/admin/logout", { method: "POST" });
-      router.push("/admin/login");
+      router.push("/admin-login");
     } catch (error) {
       console.error("Logout error:", error);
     }
