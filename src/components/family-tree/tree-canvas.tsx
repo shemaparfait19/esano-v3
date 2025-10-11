@@ -68,12 +68,76 @@ export function TreeCanvas({
     updateMember,
   } = useFamilyTreeStore();
 
+  // ===== Build edit mode layout (preserves manual positions)
+  const buildEditModeLayout = () => {
+    const nodeWidth = 200;
+    const nodeHeight = 100;
+
+    // Safety check for empty members
+    if (!members || members.length === 0) {
+      return { nodes: [], edges: [] };
+    }
+
+    const nodes: any[] = [];
+
+    // Create nodes with manual positions or default positions
+    members.forEach((member) => {
+      const x = member.x !== undefined ? member.x : 100 + nodes.length * 250;
+      const y =
+        member.y !== undefined
+          ? member.y
+          : 100 + Math.floor(nodes.length / 4) * 150;
+
+      nodes.push({
+        id: member.id,
+        x,
+        y,
+        width: nodeWidth,
+        height: nodeHeight,
+        generation: 0,
+        member,
+      });
+    });
+
+    const nodeById: Record<string, any> = Object.fromEntries(
+      nodes.map((n) => [n.id, n])
+    );
+
+    const edgePaths = (edges || []).map((e) => {
+      const a = nodeById[e.fromId];
+      const b = nodeById[e.toId];
+      if (!a || !b)
+        return {
+          id: e.id,
+          fromId: e.fromId,
+          toId: e.toId,
+          path: "",
+          type: e.type,
+        };
+
+      const fromX = a.x + a.width / 2;
+      const fromY = a.y + a.height / 2;
+      const toX = b.x + b.width / 2;
+      const toY = b.y + b.height / 2;
+
+      return {
+        id: e.id,
+        fromId: e.fromId,
+        toId: e.toId,
+        path: `M ${fromX} ${fromY} L ${toX} ${toY}`,
+        type: e.type,
+      };
+    });
+
+    return { nodes, edges: edgePaths };
+  };
+
   // ===== Build hierarchical layout like the reference image
   const buildHierarchicalLayout = () => {
     const nodeWidth = 200;
-    const nodeHeight = 100;
-    const horizontalSpacing = 300;
-    const verticalSpacing = 200;
+    const nodeHeight = 80;
+    const horizontalSpacing = 250;
+    const verticalSpacing = 150;
 
     // Safety check for empty members
     if (!members || members.length === 0) {
@@ -97,8 +161,8 @@ export function TreeCanvas({
 
       nodes.push({
         id: member.id,
-        x,
-        y,
+        x: x - nodeWidth / 2,
+        y: y - nodeHeight / 2,
         width: nodeWidth,
         height: nodeHeight,
         generation,
@@ -107,7 +171,7 @@ export function TreeCanvas({
     };
 
     // Start with focal person
-    addNode(focalPerson, centerX - nodeWidth / 2, centerY - nodeHeight / 2, 0);
+    addNode(focalPerson, centerX, centerY, 0);
 
     // Build family tree hierarchically
     const buildFamily = (
@@ -506,13 +570,12 @@ export function TreeCanvas({
     ctx.translate(canvasState.panX, canvasState.panY);
     ctx.scale(canvasState.zoom, canvasState.zoom);
 
-    // Use hierarchical layout for "View Result" mode, otherwise use current layout
+    // Use hierarchical layout for "View Result" mode, otherwise use edit mode layout
     const localLayout = showViewResult
       ? buildHierarchicalLayout()
-      : layout ||
-        (members.length > 0
-          ? buildHierarchicalLayout()
-          : { nodes: [], edges: [] });
+      : isEditMode
+      ? buildEditModeLayout()
+      : layout || { nodes: [], edges: [] };
     renderEdges(ctx, localLayout.edges as any[]);
     renderNodes(ctx, localLayout.nodes as any[], members, renderOptions);
 
@@ -555,10 +618,9 @@ export function TreeCanvas({
   const getNodeAtPosition = (worldX: number, worldY: number) => {
     const localLayout = showViewResult
       ? buildHierarchicalLayout()
-      : layout ||
-        (members.length > 0
-          ? buildHierarchicalLayout()
-          : { nodes: [], edges: [] });
+      : isEditMode
+      ? buildEditModeLayout()
+      : layout || { nodes: [], edges: [] };
     return localLayout.nodes.find(
       (node) =>
         worldX >= node.x &&
@@ -572,10 +634,9 @@ export function TreeCanvas({
   const getEdgeAtPosition = (worldX: number, worldY: number) => {
     const localLayout = showViewResult
       ? buildHierarchicalLayout()
-      : layout ||
-        (members.length > 0
-          ? buildHierarchicalLayout()
-          : { nodes: [], edges: [] });
+      : isEditMode
+      ? buildEditModeLayout()
+      : layout || { nodes: [], edges: [] };
     const { edges: epaths } = localLayout;
     const radius = 6; // hover tolerance
     for (const e of epaths) {
