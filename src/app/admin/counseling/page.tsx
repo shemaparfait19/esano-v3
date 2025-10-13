@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
@@ -207,12 +208,12 @@ export default function AdminCounselingPage() {
 
                 <div className="grid gap-2">
                   <Label>Content</Label>
-                  <Textarea
+                  <RichTextEditor
                     value={editing.content}
-                    onChange={(e) =>
-                      setEditing({ ...editing, content: e.target.value })
+                    onChange={(html) =>
+                      setEditing({ ...editing, content: html })
                     }
-                    className="min-h-[200px]"
+                    minHeightClass="min-h-[280px]"
                   />
                 </div>
 
