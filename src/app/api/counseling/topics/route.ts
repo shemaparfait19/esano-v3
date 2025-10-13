@@ -9,13 +9,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get("search") || "").toLowerCase();
 
-    let ref = adminDb
+    // Fetch published topics; avoid Firestore composite index by sorting in memory
+    const snapshot = await adminDb
       .collection("counselingTopics")
       .where("isPublished", "==", true)
-      .orderBy("order", "asc");
-
-    const snapshot = await ref.get();
-    const topics = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      .get();
+    const topics = snapshot.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a: any, b: any) => Number(a.order ?? 0) - Number(b.order ?? 0));
 
     const filtered = search
       ? topics.filter(

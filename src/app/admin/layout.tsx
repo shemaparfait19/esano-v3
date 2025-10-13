@@ -13,6 +13,7 @@ import {
   BarChart3,
   UserCheck,
   AlertCircle,
+  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,6 +24,7 @@ const adminNavItems = [
   { href: "/admin/users", icon: Users, label: "Users" },
   { href: "/admin/logs", icon: AlertCircle, label: "Activity Logs" },
   { href: "/admin/settings", icon: Settings, label: "Settings" },
+  { href: "/admin/counseling", icon: BookOpen, label: "Counseling" },
 ];
 
 export default function AdminLayout({
