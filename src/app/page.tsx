@@ -60,6 +60,12 @@ export default function Home() {
               <Link href="/dashboard/family-tree">Family Tree</Link>
               <Link href="/dashboard/dna-analysis">DNA Analysis</Link>
               <Link href="/dashboard/insights">Insights</Link>
+              <Link
+                href="/counseling"
+                className="text-foreground hover:text-primary transition-colors"
+              >
+                Counseling
+              </Link>
             </nav>
             <Button variant="ghost" asChild>
               <Link href="/login">Log In</Link>
